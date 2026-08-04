@@ -2038,7 +2038,7 @@ function renderReport(rep, asOf) {
     ? `<span class="tag t-warn">주간 추정 파일 기준</span>` : `<span class="tag t-good">원천(로데이터) 기준</span>`;
   head.innerHTML = `<h3>세부 일일보고 · KISI 순영업수익 (억원) ${modeTag} ${rep.혼합 ? "<span class='tag t-good'>분기·기누적: 확정 실적 반영</span>" : ""}</h3>
     <p class='small'>보고일 ${asOf} · 원천 상한 ${P.원천상한} · 금일 ${P.금일.label} · 주간 ${P.주간.label} · 월간 ${P.월간.label} · 분기 ${P.분기.label} · 기 ${P.기.label}</p>
-    <p class='small muted'>보고일 실적은 원천의 전일까지를 담습니다. 월요일 보고에는 금·토·일 3일치가 들어가며, 원천에 주말 자료가 아직 없으면 그만큼 작게 나옵니다.
+    <p class='small muted'>보고일 실적은 원천의 전일까지를 담습니다. 기본값은 최신 자료일 <b>당일 하루만</b> 담는 단일일 보고이며, 그 이후 데이터가 있어도 쓰지 않습니다. 보고일을 뒤로(예: 월요일) 직접 지정해 다시 계산하면 금·토·일을 포함한 주간단위로 확장됩니다.
     ${rep.혼합 ? "분기·기누적은 마감월 관리회계 확정치 + 당월 일누적으로 산출했습니다." : "분기·기누적은 원천 raw 누적입니다. 관리회계 확정치는 <b>확정 실적</b> 탭에서 넣으면 반영됩니다."}</p>`;
   box.appendChild(head);
 
@@ -2214,11 +2214,12 @@ function recalc() {
 
     const all = Object.keys(LEDGER.데이터).sort();
     const lastRaw = all[all.length - 1];
-    if (!$("#asOf").value) {                       // 보고일 = 원천 최신일자의 다음 영업일
-      let d = addDays(lastRaw, 1);
-      const hol = holSet("한국");
-      for (let i = 0; i < 10; i++) { const ww = dow(d); if (ww >= 1 && ww <= 5 && !hol.has(d)) break; d = addDays(d, 1); }
-      $("#asOf").value = d;
+    if (!$("#asOf").value) {                       // 기본 보고일 = 원천 최신 자료일의 '다음 날'
+      // → 원천 상한 R = 최신 자료일(당일)이 되어, 금일은 그 하루만 담는 단일일 보고가 된다.
+      //   주말을 건너뛰어 월요일로 앞서가지 않는다(그 이후 데이터는 쓰지 않음).
+      //   사용자가 날짜를 그 이후(예: 월요일)로 직접 지정하고 다시 계산하면
+      //   그때 비로소 전주 금·토·일을 담는 주간단위 보고로 확장된다.
+      $("#asOf").value = addDays(lastRaw, 1);
     }
     let asOf = $("#asOf").value;
     if (addDays(asOf, -1) < all[0]) {
