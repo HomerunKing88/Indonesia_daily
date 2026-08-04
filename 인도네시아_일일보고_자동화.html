@@ -55,6 +55,9 @@ nav.tabs button .badge.zero{background:#b6c1cb}
 .field{display:flex;flex-direction:column;gap:3px}
 .field label{font-size:11px;color:var(--ink-3)}
 .field input,.field select{border:1px solid var(--line);padding:5px 7px;border-radius:3px}
+.field input.need-input,.field select.need-input{border:1.6px solid #e8590c;background:#fff4e6;box-shadow:0 0 0 2px rgba(232,89,12,.12)}
+.field input.need-input::placeholder{color:#e8590c}
+.field label .reqmark{color:#e8590c;font-weight:700;margin-left:2px}
 
 table{border-collapse:collapse;width:100%;font-size:12px}
 th,td{border:1px solid var(--line-2);padding:4px 7px;text-align:right;white-space:nowrap}
@@ -186,7 +189,7 @@ textarea{width:100%;min-height:280px;border:1px solid var(--line);padding:9px;fo
     <div class="field" style="min-width:230px"><label>적용 상태</label>
       <div class="small" id="modeInfo" style="border:1px solid var(--line);padding:6px 9px;border-radius:3px;background:#fafbfc">-</div>
     </div>
-    <div class="field"><label>임시 환율 (환율을 안 넣은 날에만 사용)</label><input type="number" step="0.0001" id="fx" value="11.6242"></div>
+    <div class="field"><label>임시 환율 (비우면 전일자 환율 사용)</label><input type="number" step="0.0001" id="fx" placeholder="미입력 = 전일자 환율"></div>
     <div class="field"><label>회계연도 시작일</label><input type="date" id="fyStart" value="2026-01-01"></div>
     <div class="field"><label>주간 목표에서 이만큼 벗어나면 표시</label>
       <select id="thr"><option value="0.10" selected>±10%</option><option value="0.05">±5%</option><option value="0.15">±15%</option><option value="0.20">±20%</option></select>
@@ -336,7 +339,9 @@ textarea{width:100%;min-height:280px;border:1px solid var(--line);padding:9px;fo
 <section class="panel" id="p-form" hidden>
   <div class="card">
     <h3>직접 넣어야 하는 값</h3>
-    <p class="small muted">원천에 없는 값입니다. 한 번 넣으면 보고양식 설정 JSON으로 내려받아 다음 날 다시 올릴 수 있습니다.</p>
+    <p class="small muted">원천에 없는 값입니다. 한 번 넣으면 보고양식 설정 JSON으로 내려받아 다음 날 다시 올릴 수 있습니다.
+      <b style="color:#e8590c">주황색으로 표시된 칸</b>은 아직 입력하지 않은 필수 항목입니다.</p>
+    <div id="reqMiss" class="small" style="margin:0 0 8px"></div>
     <div class="row">
       <div class="field"><label>KISI M/S 기목표</label><input type="number" step="0.0001" id="i_msT" value="0.01"></div>
       <div class="field"><label>신용증감 기목표(억)</label><input type="number" step="1" id="i_crT" value="102"></div>
@@ -773,6 +778,15 @@ function buildFxSeries(fyStart, mode) {
     ser[d] = { 고시: rec.고시, 일환율: inv, 포함: inc, 자동제외: auto, 누적건수: n, 평균고시: avgQuote, 기누적환율: cum };
   }
   return ser;
+}
+
+/* 임시환율(폴백): 입력하면 그 값(당일), 비우면 전일자(가장 최근 기누적) 환율 */
+function effFallbackFx() {
+  const manual = parseFloat(($("#fx") || {}).value);
+  if (isFinite(manual) && manual > 0) return manual;
+  let last = null;
+  if (FXSERIES) for (const d of Object.keys(FXSERIES).sort()) if (FXSERIES[d].기누적환율 != null) last = FXSERIES[d].기누적환율;
+  return last || 11.6242;
 }
 
 /* 보고 적용 환율: 주차 고정 / 일자별 / 기준일 일괄 */
@@ -2168,7 +2182,7 @@ function recalc() {
   const holUn0 = renderHoliday();
   $("#bHol").textContent = holUn0; $("#bHol").className = "badge" + (holUn0 ? "" : " zero");
   if (!SRCWB) {
-    const fb = parseFloat($("#fx").value) || 11.6242;
+    const fb = effFallbackFx();
     const asOf0 = $("#asOf").value || (Object.keys(FXSERIES).sort().pop() || "");
     if (Object.keys(FXSERIES).length && asOf0) {
       const fxOf0 = makeFxOf(FXSERIES, $("#fxApply").value, asOf0, fb);
@@ -2201,7 +2215,7 @@ function recalc() {
       toast(`원장 범위 밖이라 보고일을 ${asOf}로 바꿨습니다.`, "warn");
     }
 
-    const fx = parseFloat($("#fx").value) || 11.6242;
+    const fx = effFallbackFx();
     const thr = parseFloat($("#thr").value) || 0.10;
     const fyStart = $("#fyStart").value || "2026-01-01";
 
@@ -2233,6 +2247,7 @@ function recalc() {
     const F = buildForm(LEDGER, asOf, fxOf, fyStart, rep, formInputs());
     RESULT.form = F;
     renderForm(F);
+    flagRequiredInputs();
     {
       const mi = $("#mcSrcInfo");
       if (mi) {
@@ -2726,7 +2741,29 @@ $("#holFile").onchange = e => {
 
 /* 보고양식 배선 */
 const FORM_IDS = ["i_msT","i_crT","i_rMargin","i_rLoan","i_hqLoan","i_rHq","i_fxPY","i_fxPM","i_acFY","i_acT","i_mcFY","i_mcNow","i_mcPrev","i_note"];
-FORM_IDS.forEach(id => { const e = $("#" + id); if (e) e.onchange = () => { markDirty("form"); recalc(); }; });
+/* 보고에 필요한데 아직 안 넣은 칸을 눈에 띄게 표시 (선택 항목 i_note·i_fxPY·i_fxPM 제외) */
+const REQUIRED_INPUTS = [
+  { id: "i_rMargin", 이름: "신용 가중평균금리" }, { id: "i_rLoan", 이름: "대출 가중평균금리" },
+  { id: "i_hqLoan", 이름: "본사대출 잔액" }, { id: "i_rHq", 이름: "본사대출 금리" },
+  { id: "i_acFY", 이름: "총계좌 FY25" }, { id: "i_acT", 이름: "총계좌 목표" },
+  { id: "i_mcFY", 이름: "신용계좌 FY25" }, { id: "i_mcNow", 이름: "신용 계좌수(기준일)", 핵심: true }, { id: "i_mcPrev", 이름: "신용계좌 전일" }
+];
+function flagRequiredInputs() {
+  const miss = [];
+  for (const r of REQUIRED_INPUTS) {
+    const e = $("#" + r.id); if (!e) continue;
+    const empty = (e.value == null || String(e.value).trim() === "");
+    e.classList.toggle("need-input", empty);
+    if (empty) miss.push(r);
+  }
+  const box = $("#reqMiss");
+  if (box) box.innerHTML = miss.length
+    ? `<span class="tag t-warn">입력 필요 ${miss.length}칸</span> ${miss.map(m => m.이름 + (m.핵심 ? "(필수)" : "")).join(" · ")}`
+    : `<span class="tag t-good">필수 입력 완료</span>`;
+  return miss.length;
+}
+FORM_IDS.forEach(id => { const e = $("#" + id); if (e) { e.onchange = () => { markDirty("form"); recalc(); }; e.oninput = flagRequiredInputs; } });
+flagRequiredInputs();
 $("#formRefresh").onclick = recalc;
 $("#savePng").onclick = () => {
   busy(true, "이미지 만드는 중", "양식을 PNG로 변환합니다");
