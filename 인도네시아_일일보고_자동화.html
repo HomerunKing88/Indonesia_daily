@@ -547,6 +547,9 @@ function dstr(x) {
 }
 function addDays(s, n) { const d = new Date(s + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return isoUTC(d); }
 function dow(s) { return new Date(s + "T00:00:00Z").getUTCDay(); } // 0=일
+function todayStr() { const t = new Date(); const p = n => String(n).padStart(2, "0"); return `${t.getFullYear()}-${p(t.getMonth() + 1)}-${p(t.getDate())}`; }
+/* '당일(오늘)' 이하의 최신 자료일. 원천에 오늘 이후(미래) 날짜가 있어도 무시한다. all은 오름차순 정렬 가정. */
+function effLatestDay(all, today) { let e = null; for (const d of all) { if (d <= today) e = d; } return e || all[0]; }
 function mondayOf(s) { const w = dow(s); return addDays(s, w === 0 ? -6 : 1 - w); }
 function firstOfMonth(s) { return s.slice(0, 8) + "01"; }
 function firstOfQuarter(s) { const m = +s.slice(5, 7); const q = Math.floor((m - 1) / 3) * 3 + 1; return s.slice(0, 5) + String(q).padStart(2, "0") + "-01"; }
@@ -2038,7 +2041,7 @@ function renderReport(rep, asOf) {
     ? `<span class="tag t-warn">주간 추정 파일 기준</span>` : `<span class="tag t-good">원천(로데이터) 기준</span>`;
   head.innerHTML = `<h3>세부 일일보고 · KISI 순영업수익 (억원) ${modeTag} ${rep.혼합 ? "<span class='tag t-good'>분기·기누적: 확정 실적 반영</span>" : ""}</h3>
     <p class='small'>보고일 ${asOf} · 원천 상한 ${P.원천상한} · 금일 ${P.금일.label} · 주간 ${P.주간.label} · 월간 ${P.월간.label} · 분기 ${P.분기.label} · 기 ${P.기.label}</p>
-    <p class='small muted'>보고일 실적은 원천의 전일까지를 담습니다. 기본값은 최신 자료일 <b>당일 하루만</b> 담는 단일일 보고이며, 그 이후 데이터가 있어도 쓰지 않습니다. 보고일을 뒤로(예: 월요일) 직접 지정해 다시 계산하면 금·토·일을 포함한 주간단위로 확장됩니다.
+    <p class='small muted'>보고일 실적은 원천의 전일까지를 담습니다. 기본값은 <b>당일(오늘) 기준</b>으로 그 이하 최신 자료일 하루만 담는 단일일 보고이며, 원천에 오늘 이후(미래) 날짜 데이터가 있어도 쓰지 않습니다. 보고일을 뒤로(예: 월요일) 직접 지정해 다시 계산하면 금·토·일을 포함한 주간단위로 확장됩니다.
     ${rep.혼합 ? "분기·기누적은 마감월 관리회계 확정치 + 당월 일누적으로 산출했습니다." : "분기·기누적은 원천 raw 누적입니다. 관리회계 확정치는 <b>확정 실적</b> 탭에서 넣으면 반영됩니다."}</p>`;
   box.appendChild(head);
 
@@ -2214,16 +2217,18 @@ function recalc() {
 
     const all = Object.keys(LEDGER.데이터).sort();
     const lastRaw = all[all.length - 1];
-    if (!$("#asOf").value) {                       // 기본 보고일 = 원천 최신 자료일의 '다음 날'
-      // → 원천 상한 R = 최신 자료일(당일)이 되어, 금일은 그 하루만 담는 단일일 보고가 된다.
-      //   주말을 건너뛰어 월요일로 앞서가지 않는다(그 이후 데이터는 쓰지 않음).
+    // 기본 보고일의 기준이 되는 '당일 이하 최신 자료일'. 원천에 오늘 이후(미래) 날짜가 있어도 무시한다.
+    const effLast = effLatestDay(all, todayStr());
+    if (!$("#asOf").value) {                       // 기본 보고일 = 당일 이하 최신 자료일의 '다음 날'
+      // → 원천 상한 R = 그 자료일이 되어, 금일은 그 하루만 담는 단일일 보고가 된다.
+      //   미래 날짜 데이터가 있어도 그쪽으로 앞서가지 않고(당일 기준), 주말도 건너뛰지 않는다.
       //   사용자가 날짜를 그 이후(예: 월요일)로 직접 지정하고 다시 계산하면
       //   그때 비로소 전주 금·토·일을 담는 주간단위 보고로 확장된다.
-      $("#asOf").value = addDays(lastRaw, 1);
+      $("#asOf").value = addDays(effLast, 1);
     }
     let asOf = $("#asOf").value;
     if (addDays(asOf, -1) < all[0]) {
-      asOf = addDays(lastRaw, 1); $("#asOf").value = asOf;
+      asOf = addDays(effLast, 1); $("#asOf").value = asOf;
       toast(`원장 범위 밖이라 보고일을 ${asOf}로 바꿨습니다.`, "warn");
     }
 
