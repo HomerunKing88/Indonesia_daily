@@ -1953,7 +1953,7 @@ function formToPng(scale) {
     const g = cv.getContext("2d");
     g.fillStyle = "#fff"; g.fillRect(0, 0, cv.width, cv.height);
     g.scale(scale, scale); g.drawImage(img, 0, 0);
-    cv.toBlob(bl => { const fn = `일일보고_${(RESULT ? RESULT.asOf : "").replace(/-/g, "")}.png`; dl(fn, bl); toast(dlMsg(fn)); }, "image/png");
+    cv.toBlob(bl => { const fn = `일일보고_${stamp6()}.png`; dl(fn, bl); toast(dlMsg(fn)); }, "image/png");
   };
   img.onerror = () => toast("PNG 변환에 실패했습니다. 양식을 드래그로 선택해 복사한 뒤 이메일에 그림으로 붙여넣으세요.", "bad");
   img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
@@ -2740,7 +2740,7 @@ $("#holReloadId").onclick = () => {
   $("#holKind").value = "인니";
   renderHoliday(); recalc();
 };
-$("#dlHol").onclick = () => { dl("holidays.json", new Blob([JSON.stringify(HOLI, null, 1)], { type: "application/json" })); DIRTY.hol = false; renderSteps(); };
+$("#dlHol").onclick = () => { dl(`휴일_${stamp6()}.json`, new Blob([JSON.stringify(HOLI, null, 1)], { type: "application/json" })); DIRTY.hol = false; renderSteps(); };
 $("#pickHol").onclick = () => $("#holFile").click();
 $("#holFile").onchange = e => {
   const f = e.target.files[0]; if (!f) return;
@@ -2792,7 +2792,7 @@ $("#saveFormXlsx").onclick = () => {
   defer(() => {
     try {
       const u8 = formToXlsx(RESULT.form);
-      const fn = `KISI_일일보고_${(RESULT.asOf || "").replace(/-/g, "")}.xlsx`;
+      const fn = `KISI_일일보고_${stamp6()}.xlsx`;
       dl(fn, new Blob([u8], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
       toast(dlMsg(fn));
     } catch (e) { toast("엑셀 저장 실패: " + e.message, "bad"); }
@@ -2816,7 +2816,7 @@ $("#copyForm").onclick = async () => {
 $("#dlFormCfg").onclick = () => {
   const o = {}; FORM_IDS.forEach(id => o[id] = $("#" + id).value);
   o.기시작일 = $("#fyStart").value; o.휴일 = HOLI;
-  dl("form_config.json", new Blob([JSON.stringify(o, null, 1)], { type: "application/json" }));
+  dl(`설정_${stamp6()}.json`, new Blob([JSON.stringify(o, null, 1)], { type: "application/json" }));
 };
 $("#pickFormCfg").onclick = () => $("#formCfgFile").click();
 $("#formCfgFile").onchange = e => {
@@ -2837,7 +2837,7 @@ $("#formCfgFile").onchange = e => {
 $("#dlFx").onclick = () => {
   FXLED.휴일 = [];
   FXLED.갱신시각 = new Date().toISOString();
-  dl("fx_ledger.json", new Blob([JSON.stringify(FXLED, null, 1)], { type: "application/json" }));
+  dl(`환율_${stamp6()}.json`, new Blob([JSON.stringify(FXLED, null, 1)], { type: "application/json" }));
   DIRTY.fx = false; renderSteps();
 };
 
@@ -2852,7 +2852,7 @@ $("#closePasteAdd").onclick = () => {
 $("#dlClose").onclick = () => {
   if (!Object.keys(CLOSE.데이터).length) { toast("입력된 확정 실적이 없습니다.", "warn"); return; }
   CLOSE.갱신시각 = new Date().toISOString();
-  dl("close_ledger.json", new Blob([JSON.stringify(CLOSE, null, 1)], { type: "application/json" }));
+  dl(`확정실적_${stamp6()}.json`, new Blob([JSON.stringify(CLOSE, null, 1)], { type: "application/json" }));
   DIRTY.close = false; renderSteps();
 };
 $("#pickClose").onclick = () => $("#closeFile").click();
@@ -2863,13 +2863,15 @@ function dl(name, blob) {
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
+/* 저장 파일명 날짜 6자리(YYMMDD) — 보고일(asOf) 기준, 없으면 오늘 */
+function stamp6() { const a = (RESULT && RESULT.asOf) ? RESULT.asOf : todayStr(); return a.slice(2).replace(/-/g, ""); }
 /* 저장 위치 안내 메시지: 브라우저 다운로드 폴더에 저장됨을 파일명과 함께 알림 */
 function dlMsg(name) {
   return `저장했습니다 · 파일명: ${name}\n브라우저 기본 '다운로드(Downloads)' 폴더에 저장됩니다. 브라우저 우측 상단 ⤓ 다운로드 목록에서도 열 수 있습니다.`;
 }
 function dlLedgerNow() {
   if (!LEDGER) return false;
-  dl(`ledger_${(RESULT && RESULT.asOf ? RESULT.asOf : "").replace(/-/g,"")}.json`, new Blob([JSON.stringify(LEDGER, null, 1)], { type: "application/json" }));
+  dl(`원장_${stamp6()}.json`, new Blob([JSON.stringify(LEDGER, null, 1)], { type: "application/json" }));
   DIRTY.ledger = false; return true;
 }
 $("#dlAll").onclick = () => {
@@ -2877,24 +2879,24 @@ $("#dlAll").onclick = () => {
   if (dlLedgerNow()) done.push("원장");
   if (Object.keys(FXLED.데이터).length) {
     FXLED.갱신시각 = new Date().toISOString();
-    dl("fx_ledger.json", new Blob([JSON.stringify(FXLED, null, 1)], { type: "application/json" }));
+    dl(`환율_${stamp6()}.json`, new Blob([JSON.stringify(FXLED, null, 1)], { type: "application/json" }));
     DIRTY.fx = false; done.push("환율");
   }
-  dl("holidays.json", new Blob([JSON.stringify(HOLI, null, 1)], { type: "application/json" }));
+  dl(`휴일_${stamp6()}.json`, new Blob([JSON.stringify(HOLI, null, 1)], { type: "application/json" }));
   DIRTY.hol = false; done.push("휴일");
   if (Object.keys(EST.데이터).length) {
     EST.갱신시각 = new Date().toISOString();
-    dl("est_ledger.json", new Blob([JSON.stringify(EST, null, 1)], { type: "application/json" }));
+    dl(`주간추정_${stamp6()}.json`, new Blob([JSON.stringify(EST, null, 1)], { type: "application/json" }));
     DIRTY.est = false; done.push("추정");
   }
   if (Object.keys(CLOSE.데이터).length) {
     CLOSE.갱신시각 = new Date().toISOString();
-    dl("close_ledger.json", new Blob([JSON.stringify(CLOSE, null, 1)], { type: "application/json" }));
+    dl(`확정실적_${stamp6()}.json`, new Blob([JSON.stringify(CLOSE, null, 1)], { type: "application/json" }));
     DIRTY.close = false; done.push("확정실적");
   }
   const o = {}; FORM_IDS.forEach(id => o[id] = $("#" + id).value);
   o.기시작일 = $("#fyStart").value; o.휴일 = HOLI;
-  dl("form_config.json", new Blob([JSON.stringify(o, null, 1)], { type: "application/json" }));
+  dl(`설정_${stamp6()}.json`, new Blob([JSON.stringify(o, null, 1)], { type: "application/json" }));
   DIRTY.form = false; done.push("설정");
   toast(`${done.join(" · ")} 원장을 내려받았습니다. 다음 실행 때 그대로 다시 올리세요.`);
   renderSteps();
@@ -2933,7 +2935,7 @@ $("#dlXlsx").onclick = () => {
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(r5), "환율원장");
   }
   const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-  dl(`일일보고_적재검증_${(RESULT.asOf || "").replace(/-/g, "")}.xlsx`, new Blob([out], { type: "application/octet-stream" }));
+  dl(`적재검증_${stamp6()}.xlsx`, new Blob([out], { type: "application/octet-stream" }));
 };
 
 /* 매핑 편집 */
