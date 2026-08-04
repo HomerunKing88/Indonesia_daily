@@ -740,6 +740,16 @@ function holAdd(kind, 일자, 명칭, 확정) {
   HOLI[kind][y].sort((a, b) => a.일자 < b.일자 ? -1 : 1);
   return true;
 }
+/* 인니 휴일 명칭 정규화 — 원천 인도네시아휴일 시트에 실제 휴일명이 없어 월 라벨(Jan/Feb…)이
+   명칭으로 잡히던 오염을 '인니 휴장일'로 통일한다. (날짜는 그대로 두고 명칭만 정리) */
+function isMonthLabel(s) {
+  const t = String(s || "").trim();
+  return /^(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec|january|february|march|april|june|july|august|september|october|november|december)$/i.test(t) || /^\d{1,2}\s*월$/.test(t);
+}
+function cleanHolName(name) { const t = String(name || "").trim(); return (!t || t === "원천" || isMonthLabel(t)) ? "인니 휴장일" : t; }
+function normalizeIdHolNames() {
+  for (const y of Object.keys(HOLI.인니 || {})) for (const r of (HOLI.인니[y] || [])) r.명칭 = cleanHolName(r.명칭);
+}
 function holDel(kind, 일자) {
   const y = 일자.slice(0, 4);
   if (!HOLI[kind] || !HOLI[kind][y]) return;
@@ -1470,14 +1480,16 @@ function loadIdHolidays(wb, force) {
   let n = 0;
   for (const row of g) {
     let d = null, name = "";
-    for (const v of (row || [])) { const x = dstr(v); if (x && !d) d = x; else if (typeof v === "string" && v.trim() && !name) name = v.trim(); }
+    // 월 라벨(Jan/Feb…)은 명칭으로 쓰지 않는다. 원천에 실제 휴일명이 있으면 그것만 잡는다.
+    for (const v of (row || [])) { const x = dstr(v); if (x && !d) d = x; else if (typeof v === "string" && v.trim() && !name && !isMonthLabel(v)) name = v.trim(); }
     if (!d) continue;
     const y = d.slice(0, 4);
     if (+y < 2000 || +y > 2100) continue;
     const exists = ((HOLI.인니 || {})[y] || []).some(r => r.일자 === d);
     if (exists && !force) continue;
-    if (holAdd("인니", d, name || "원천", true)) n++;
+    if (holAdd("인니", d, cleanHolName(name), true)) n++;
   }
+  normalizeIdHolNames();   // 기존에 적재돼 있던 오염 명칭도 함께 정리
   return n;
 }
 function bizDays(from, to) {
@@ -1960,6 +1972,7 @@ function formToPng(scale) {
 }
 
 function renderHoliday() {
+  normalizeIdHolNames();   // 어떤 경로로 적재되든(내장·파일·설정) 인니 명칭을 항상 정리
   const kind = $("#holKind").value;
   const years = holYears(kind);
   const sel = $("#holYear");
