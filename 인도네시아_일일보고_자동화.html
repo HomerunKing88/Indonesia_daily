@@ -1573,11 +1573,11 @@ function renderForm(F) {
   const line = (r, cls) => {
     const g = F.rate(r);
     return `<tr class="${cls||''}"><td class="l">${r.항목}</td><td>${nfmt(r.기목표,2)}</td>
-      <td>${nfmt(r.금일,4)}</td><td>${pfmt(g.금일)}</td>
-      <td>${nfmt(r.주간,4)}</td><td>${pfmt(g.주간)}</td>
-      <td>${nfmt(r.월간,4)}</td><td>${pfmt(g.월간)}</td>
-      <td>${nfmt(r.분기,4)}</td><td>${pfmt(g.분기)}</td>
-      <td>${nfmt(r.기,4)}</td><td>${pfmt(g.기)}</td></tr>`;
+      <td>${nfmt(r.금일,2)}</td><td>${pfmt(g.금일)}</td>
+      <td>${nfmt(r.주간,2)}</td><td>${pfmt(g.주간)}</td>
+      <td>${nfmt(r.월간,2)}</td><td>${pfmt(g.월간)}</td>
+      <td>${nfmt(r.분기,2)}</td><td>${pfmt(g.분기)}</td>
+      <td>${nfmt(r.기,2)}</td><td>${pfmt(g.기)}</td></tr>`;
   };
   for (const r of rep.rows) h += line(r);
   h += line(rep.total, "sum");
@@ -1590,10 +1590,10 @@ function renderForm(F) {
       <th colspan="2">금일</th><th colspan="2">주간</th><th colspan="2">월간</th><th colspan="2">분기</th><th colspan="2">기</th></tr>
     <tr><th>실적</th><th>달성률</th><th>실적</th><th>달성률</th><th>실적</th><th>달성률</th><th>실적</th><th>달성률</th><th>실적</th><th>달성률</th></tr>
     </thead><tbody>`;
-  h += `<tr><td class="l">KISI M/S</td><td>${(i.msT*100).toFixed(2)}%</td>`;
-  for (const p of ["금일","주간","월간","분기","기"]) h += `<td>${F.ms[p]==null?"-":(F.ms[p]*100).toFixed(3)+"%"}</td><td>${F.ms[p]==null?"-":pfmt(F.ms[p]/i.msT)}</td>`;
+  h += `<tr><td class="l">KISI M/S</td><td>${(i.msT*100).toFixed(1)}%</td>`;
+  for (const p of ["금일","주간","월간","분기","기"]) h += `<td>${F.ms[p]==null?"-":(F.ms[p]*100).toFixed(1)+"%"}</td><td>${F.ms[p]==null?"-":pfmt(F.ms[p]/i.msT)}</td>`;
   h += `</tr>`;
-  h += `<tr><td class="l">KISI 신용증감</td><td>${nfmt(i.crT,0)}</td>`;
+  h += `<tr><td class="l">KISI 신용증감</td><td>${nfmt(i.crT,2)}</td>`;
   for (const p of ["금일","주간","월간","분기","기"]) {
     const v = F.cr[p];
     h += `<td>${nfmt(v,2)}</td><td>${v==null?"-":(v<0?"-":pfmt(v/i.crT))}</td>`;
@@ -1604,10 +1604,10 @@ function renderForm(F) {
   h += `<div class="fs">3) KISI 신용대출 현황</div><div class="fu">(단위 : 억원, %)</div>`;
   h += `<table><thead><tr><th class="l" colspan="2">구분</th><th>금일</th><th>전일</th><th>전월말</th><th>전년말</th><th>가중평균금리</th></tr></thead><tbody>`;
   const b = F.bal;
-  h += `<tr><td class="l" rowspan="3">여신</td><td class="l">신용</td><td>${nfmt(b.금일.신용,2)}</td><td>${nfmt(b.전일.신용,2)}</td><td>${nfmt(b.전월말.신용,2)}</td><td>${nfmt(b.전년말.신용,2)}</td><td>${i.rMargin==null?"-":(i.rMargin*100).toFixed(2)+"%"}</td></tr>`;
-  h += `<tr><td class="l">대출</td><td>${nfmt(b.금일.대출,2)}</td><td>${nfmt(b.전일.대출,2)}</td><td>${nfmt(b.전월말.대출,2)}</td><td>${nfmt(b.전년말.대출,2)}</td><td>${i.rLoan==null?"-":(i.rLoan*100).toFixed(2)+"%"}</td></tr>`;
-  h += `<tr class="sum"><td class="l">소계</td><td>${nfmt(b.금일.소계,2)}</td><td>${nfmt(b.전일.소계,2)}</td><td>${nfmt(b.전월말.소계,2)}</td><td>${nfmt(b.전년말.소계,2)}</td><td>${i.rMargin==null||i.rLoan==null?"-":(((b.금일.신용*i.rMargin+b.금일.대출*i.rLoan)/b.금일.소계)*100).toFixed(2)+"%"}</td></tr>`;
-  h += `<tr><td class="l">차입</td><td class="l">본사대출</td><td>${nfmt(i.hqLoan,2)}</td><td colspan="3" class="c">-</td><td>${i.rHq==null?"-":(i.rHq*100).toFixed(2)+"%"}</td></tr>`;
+  h += `<tr><td class="l" rowspan="3">여신</td><td class="l">신용</td><td>${nfmt(b.금일.신용,0)}</td><td>${nfmt(b.전일.신용,0)}</td><td>${nfmt(b.전월말.신용,0)}</td><td>${nfmt(b.전년말.신용,0)}</td><td>${i.rMargin==null?"-":(i.rMargin*100).toFixed(2)+"%"}</td></tr>`;
+  h += `<tr><td class="l">대출</td><td>${nfmt(b.금일.대출,0)}</td><td>${nfmt(b.전일.대출,0)}</td><td>${nfmt(b.전월말.대출,0)}</td><td>${nfmt(b.전년말.대출,0)}</td><td>${i.rLoan==null?"-":(i.rLoan*100).toFixed(2)+"%"}</td></tr>`;
+  h += `<tr class="sum"><td class="l">소계</td><td>${nfmt(b.금일.소계,0)}</td><td>${nfmt(b.전일.소계,0)}</td><td>${nfmt(b.전월말.소계,0)}</td><td>${nfmt(b.전년말.소계,0)}</td><td>${i.rMargin==null||i.rLoan==null?"-":(((b.금일.신용*i.rMargin+b.금일.대출*i.rLoan)/b.금일.소계)*100).toFixed(2)+"%"}</td></tr>`;
+  h += `<tr><td class="l">차입</td><td class="l">본사대출</td><td>${nfmt(i.hqLoan,0)}</td><td colspan="3" class="c">-</td><td>${i.rHq==null?"-":(i.rHq*100).toFixed(2)+"%"}</td></tr>`;
   h += `</tbody></table><div class="fn">* 신용 = 신용잔고 + 미수, 대출 = 주식담보대출 · 전월말 ${F.pmEnd}, 전년말 ${F.pyEnd} 기준 · 시점별 적용환율 금일 ${F.fxAsOf.toFixed(4)} / 전월말 ${(i.fxPM||0)?i.fxPM.toFixed(4):"환율원장"} / 전년말 ${(i.fxPY||0)?i.fxPY.toFixed(4):"환율원장"}</div>`;
 
   // 계좌수
@@ -1664,14 +1664,16 @@ const colName = i => { let s = "", n = i; do { s = String.fromCharCode(65 + (n %
 
 /* 서식 번호
    1 문서제목 · 2 섹션제목 · 3 표머리 · 4 라벨 · 5 소수4 · 6 소수2 · 7 퍼센트 · 8 정수
-   9 합계라벨 · 10 합계소수4 · 11 합계소수2 · 12 합계퍼센트 · 13 각주 · 14 본문상자 · 15 단위 · 16 합계정수 · 17 라벨중앙 */
+   9 합계라벨 · 10 합계소수4 · 11 합계소수2 · 12 합계퍼센트 · 13 각주 · 14 본문상자 · 15 단위 · 16 합계정수 · 17 라벨중앙
+   18 금리퍼센트(0.00%) · 19 합계금리퍼센트(0.00%) */
 const STYLES_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-<numFmts count="4">
+<numFmts count="5">
 <numFmt numFmtId="164" formatCode="#,##0.0000;-#,##0.0000;&quot;-&quot;"/>
 <numFmt numFmtId="165" formatCode="#,##0.00;-#,##0.00;&quot;-&quot;"/>
 <numFmt numFmtId="166" formatCode="0.0%;-0.0%;&quot;-&quot;"/>
 <numFmt numFmtId="167" formatCode="#,##0;-#,##0;&quot;-&quot;"/>
+<numFmt numFmtId="168" formatCode="0.00%;-0.00%;&quot;-&quot;"/>
 </numFmts>
 <fonts count="7">
 <font><sz val="10"/><name val="맑은 고딕"/></font>
@@ -1693,7 +1695,7 @@ const STYLES_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <border><left style="thin"><color rgb="FF7F7F7F"/></left><right style="thin"><color rgb="FF7F7F7F"/></right><top style="thin"><color rgb="FF7F7F7F"/></top><bottom style="thin"><color rgb="FF7F7F7F"/></bottom><diagonal/></border>
 </borders>
 <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-<cellXfs count="18">
+<cellXfs count="20">
 <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
 <xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>
 <xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>
@@ -1712,6 +1714,8 @@ const STYLES_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <xf numFmtId="0" fontId="5" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="right"/></xf>
 <xf numFmtId="167" fontId="6" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
 <xf numFmtId="0" fontId="3" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="168" fontId="3" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+<xf numFmtId="168" fontId="6" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
 </cellXfs>
 <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
 <dxfs count="0"/>
@@ -1813,8 +1817,8 @@ function formToXlsx(F) {
     B.txt(r, 0, row.항목, sum ? 9 : 4);
     B.num(r, 1, row.기목표, sum ? 11 : 6);
     ["금일", "주간", "월간", "분기", "기"].forEach((p, k) => {
-      B.num(r, 2 + k * 2, row[p], sum ? 10 : 5);
-      B.num(r, 3 + k * 2, g[p], sum ? 12 : 7);
+      B.num(r, 2 + k * 2, row[p], sum ? 11 : 6);   // 억 금액: 소수 2자리
+      B.num(r, 3 + k * 2, g[p], sum ? 12 : 7);      // 달성률 %: 소수 1자리
     });
     r++;
   };
@@ -1848,8 +1852,8 @@ function formToXlsx(F) {
   r++;
   const bRow = (g, lab, vals, rate, sum) => {
     B.txt(r, 0, g, sum ? 9 : 4); B.txt(r, 1, lab, sum ? 9 : 4);
-    vals.forEach((v, k) => B.num(r, 2 + k, v, sum ? 11 : 6));
-    B.num(r, 6, rate, sum ? 12 : 7);
+    vals.forEach((v, k) => B.num(r, 2 + k, v, sum ? 16 : 8));   // 말잔: 정수(억, 소수 없음)
+    B.num(r, 6, rate, sum ? 19 : 18);                           // 가중평균금리 %: 소수 2자리
     r++;
   };
   const rStart = r;
