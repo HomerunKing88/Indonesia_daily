@@ -392,7 +392,7 @@ textarea{width:100%;min-height:280px;border:1px solid var(--line);padding:9px;fo
     <p class="small" style="background:#f3f7fb;border-left:3px solid #1f4e79;padding:8px 10px;margin-top:6px">
       <b>기본값이 이미 들어 있습니다</b>(집계 시트 1~6월 확정). 아래 칸에서 값을 <b>직접 고칠 수 있고</b>,
       고친 뒤 <b>[확정 실적 파일 받기]</b>를 누르면 <code>close_ledger.json</code>으로 저장됩니다.
-      다음에 그 파일을 화면에 올리면(또는 [확정 실적 파일 열기]) 고친 값이 그대로 유지되며, 내장 기본값을 완전히 대체합니다.</p>
+      다음에 그 파일을 화면에 올리면(또는 [확정 실적 파일 열기]) <b>올린 달만 덮어쓰고 나머지 달은 그대로 유지</b>합니다(병합). 삭제는 표에서 단계를 '미마감'으로 두세요.</p>
   </div>
   <details class="card" id="closeAcc" open>
     <summary style="cursor:pointer;font-weight:600;color:var(--accent,#1f4e79)">확정 실적 입력 (월 × 포켓, 억원) — 접기/펼치기</summary>
@@ -709,10 +709,14 @@ const KR_2026 = [
   ["2026-06-03","지방선거"],["2026-08-17","광복절 대체"],["2026-09-24","추석 연휴"],["2026-09-25","추석"],
   ["2026-09-28","추석 대체"],["2026-10-05","개천절 대체"],["2026-10-09","한글날"],["2026-12-25","성탄절"]
 ];
+/* 인도네시아 휴장일(2026) 기본 내장 — 원천 인도네시아휴일 시트 기준. 휴일 탭에서 수정·추가·삭제 가능 */
+const ID_2026 = ["2026-01-01","2026-01-16","2026-02-16","2026-02-17","2026-03-18","2026-03-19","2026-03-20",
+  "2026-03-23","2026-03-24","2026-04-03","2026-05-01","2026-05-14","2026-05-15","2026-05-27","2026-05-28",
+  "2026-06-01","2026-06-16","2026-07-25","2026-08-17","2026-12-24","2026-12-25","2026-12-31"];
 let HOLI = {
   버전: 1,
   한국: { "2026": KR_2026.map(x => ({ 일자: x[0], 명칭: x[1], 제외: true, 확정: true })) },
-  인니: {}
+  인니: { "2026": ID_2026.map(d => ({ 일자: d, 명칭: "인니 휴장일", 제외: true, 확정: true })) }
 };
 
 function holYears(kind) { return Object.keys(HOLI[kind] || {}).sort(); }
@@ -2409,8 +2413,12 @@ function routeFile(file) {
       toast(`추정 원장을 불러왔습니다 (${Object.keys(EST.데이터).length}일)`); recalc(); return;
     }
     if (j.단위 === "억원" && j.데이터 && Object.values(j.데이터).some(v => v && typeof v === "object" && ("단계" in v || CLOSE_ROWS.some(rn => rn in v)))) {
-      CLOSE = Object.assign({ 버전: 1, 단위: "억원", 데이터: {}, 이력: [] }, j);
-      toast(`확정 실적 원장을 불러왔습니다 (${Object.keys(CLOSE.데이터).length}개월)`); recalc(); return;
+      if (j.버전) CLOSE.버전 = j.버전; if (j.단위) CLOSE.단위 = j.단위; if (j.출처) CLOSE.출처 = j.출처;
+      const nUp = Object.keys(j.데이터 || {}).length;
+      for (const mk in (j.데이터 || {})) CLOSE.데이터[mk] = j.데이터[mk];   // 병합: 올린 달만 덮어쓰고 나머지 유지
+      if (Array.isArray(j.이력)) CLOSE.이력 = j.이력;
+      markDirty("close");
+      toast(`확정 실적 병합: 올린 ${nUp}개월 반영(나머지 달은 유지) · 총 ${Object.keys(CLOSE.데이터).length}개월`); recalc(); return;
     }
     if (j.한국 || j.인니) {
       const kept = [];
@@ -2423,8 +2431,10 @@ function routeFile(file) {
         (kept.length ? `\n파일에 없는 연도는 그대로 두었습니다: ${kept.join(", ")}` : ""));
       renderHoliday();
     } else if (j.데이터 && Object.values(j.데이터).some(v => v && typeof v === "object" && "고시" in v)) {
-      FXLED = Object.assign({ 버전: 1, 데이터: {}, 휴일: [], 이력: [] }, j);
-      toast(`환율 원장 적재: ${Object.keys(FXLED.데이터).length}일`);
+      if (j.단위) FXLED.단위 = j.단위; if (j.출처) FXLED.출처 = j.출처;
+      const nUp = Object.keys(j.데이터 || {}).length;
+      for (const d in (j.데이터 || {})) FXLED.데이터[d] = j.데이터[d];   // 병합: 올린 일자만 덮어쓰고 나머지 유지
+      toast(`환율 병합: 올린 ${nUp}일 반영(나머지 유지) · 총 ${Object.keys(FXLED.데이터).length}일`);
     } else if (j.데이터) {
       PREV = j;
       toast(`기존 원장 적재: ${Object.keys(j.데이터).length}일 · 과거 값 변경 대조를 수행합니다`);
@@ -2472,7 +2482,7 @@ function readFxLedger(file) {
     try {
       const j = JSON.parse(e.target.result);
       if (!j.데이터) throw new Error("환율 원장 형식이 아닙니다.");
-      FXLED = Object.assign({ 버전: 1, 데이터: {}, 휴일: [], 이력: [] }, j);
+      for (const d in (j.데이터 || {})) FXLED.데이터[d] = j.데이터[d];   // 병합
       $("#dropFx").querySelector("strong").textContent = `환율 원장 적재 완료 (${Object.keys(FXLED.데이터).length}일)`;
       recalc();
     } catch (err) { toast("환율 원장을 읽지 못했습니다: " + err.message, "bad"); }
