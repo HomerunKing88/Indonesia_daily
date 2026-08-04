@@ -793,6 +793,9 @@ function effFallbackFx() {
 function makeFxOf(ser, apply, asOf, fallback) {
   const days = Object.keys(ser).sort();
   fallback = (fallback && isFinite(fallback) && fallback > 0) ? fallback : 11.6242;
+  let firstCum = null;                                  // 가장 이른 기누적환율(연초 휴일 앞채움용)
+  for (const x of days) if (ser[x].기누적환율 != null) { firstCum = ser[x].기누적환율; break; }
+  const holKR = holSet("한국"), holID = holSet("인니");
   const at = d => { // d 이하 최근 환율
     let hit = null;
     for (const x of days) { if (x <= d && ser[x].기누적환율 != null) hit = ser[x]; else if (x > d) break; }
@@ -807,7 +810,13 @@ function makeFxOf(ser, apply, asOf, fallback) {
     if (apply === "asof") v = at(prevWeekEnd(asOf)) || at(asOf);
     else if (apply === "day") v = at(d);
     else v = at(prevWeekEnd(d)) || at(d);
-    if (v == null) { missing.add(d); v = fallback; }
+    if (v == null) {
+      // 연초 휴일(예: 1/1)처럼 환율이 없는 날은 가장 이른 기누적환율로 앞채우고 경고하지 않는다.
+      v = (firstCum != null) ? firstCum : fallback;
+      const w = dow(d);
+      const expected = (w === 0 || w === 6) || holKR.has(d) || holID.has(d);
+      if (!expected && v === fallback) missing.add(d);   // 휴일·주말이 아니고 앞채울 값도 없는 진짜 결측만 경고
+    }
     cache[d] = v; return v;
   };
   fn.spotAt = d => {                                   // 잔고용 일자 spot
@@ -1424,11 +1433,13 @@ function renderFx(ser, refs, apply, asOf, fxOf, fallback) {
 
   // 적재 표
   const c = el("div", "card");
-  c.innerHTML = `<h3>일자별 적재 내역</h3><p class='small muted'>보고 적용 방식: ${apply === "week" ? "주차 고정" : apply === "day" ? "일자별 기누적" : "기준일 기누적 일괄"}. 주말과 공휴일은 평균에서 자동 제외합니다.</p>`;
+  const fyY = (($("#fyStart") || {}).value || "2026-01-01").slice(0, 4);
+  const showDays = days.filter(d => d.slice(0, 4) === fyY);
+  c.innerHTML = `<h3>일자별 적재 내역 (${fyY}년 전체 ${showDays.length}일)</h3><p class='small muted'>보고 적용 방식: ${apply === "week" ? "주차 고정" : apply === "day" ? "일자별 기누적" : "기준일 기누적 일괄"}. 당해년도(${fyY}) 데이터를 모두 표시합니다. 주말과 공휴일은 평균에서 자동 제외하며, ${fyY}-01-01 같은 휴장일은 데이터가 없어도 정상입니다.</p>`;
   const t2 = el("table");
   const wk = ["일", "월", "화", "수", "목", "금", "토"];
   let h2 = "<thead><tr><th class='l'>일자</th><th>요일</th><th>고시환율<br>(원/100IDR)</th><th>일자 환산<br>(IDR/KRW)</th><th>평균 포함</th><th>누적 건수</th><th>평균 고시</th><th>기누적환율</th><th>보고 적용</th></tr></thead><tbody>";
-  for (const d of days.slice(-90).reverse()) {
+  for (const d of showDays.reverse()) {
     const x = ser[d];
     h2 += `<tr><td class='l num'>${d}</td><td>${wk[dow(d)]}</td><td class='num'>${x.고시.toFixed(4)}</td>
       <td class='num'>${x.일환율.toFixed(6)}</td>
