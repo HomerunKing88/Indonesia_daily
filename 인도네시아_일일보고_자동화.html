@@ -880,8 +880,10 @@ function friBefore(ledger, d) {                              // 토→전일(금
 function dayFlowRaw(ledger, code, d) {
   const w = dow(d), zero = WEEKEND_ZERO.has(code);
   if (w === 6 || w === 0) {                                 // 토·일
-    if (zero) return 0;
-    const fri = friBefore(ledger, d);
+    const rw = ledger.데이터[d];
+    if (rw && typeof rw[code] === "number") return rw[code]; // 원천에 주말행이 있으면 그대로(원천 우선)
+    if (zero) return 0;                                     // 없을 때만 규칙 합성: 거래성=0
+    const fri = friBefore(ledger, d);                       // 이자·평가성=직전 금요일 값으로 보충
     const r = fri ? ledger.데이터[fri] : null;
     return (r && typeof r[code] === "number") ? r[code] : 0;
   }
