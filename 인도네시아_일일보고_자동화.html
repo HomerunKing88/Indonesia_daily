@@ -1868,6 +1868,72 @@ function makeXlsx(sheetName, sheetXml) {
   return zipStore(F);
 }
 
+/* 여러 시트 엑셀: sheets = [{name, xml}, ...] */
+function makeXlsxMulti(sheets) {
+  const wsCT = sheets.map((s, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("");
+  const sheetTags = sheets.map((s, i) => `<sheet name="${xe(s.name)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join("");
+  const wsRels = sheets.map((s, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join("");
+  const stylesRid = sheets.length + 1;
+  const F = [
+    { name: "[Content_Types].xml", data: utf8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+${wsCT}
+<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+</Types>`) },
+    { name: "_rels/.rels", data: utf8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`) },
+    { name: "xl/workbook.xml", data: utf8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheets>${sheetTags}</sheets></workbook>`) },
+    { name: "xl/_rels/workbook.xml.rels", data: utf8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+${wsRels}<Relationship Id="rId${stylesRid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`) },
+    { name: "xl/styles.xml", data: utf8(STYLES_XML) },
+    ...sheets.map((s, i) => ({ name: `xl/worksheets/sheet${i + 1}.xml`, data: utf8(s.xml) }))
+  ];
+  return zipStore(F);
+}
+
+/* 세부 일일보고 시트: 순영업수익 포켓별 상세 + 회계마감 전(raw) 기누적 + 환율 */
+function detailSheetXml(F) {
+  const B = SheetBuilder();
+  const rep = F.rep, P = F.P;
+  let r = 0;
+  B.txt(r, 0, `세부 일일보고 (KISI)   기준일 ${F.asOf}`, 1); B.merge(r, 0, r, 7); r += 2;
+
+  B.txt(r, 0, "1) 순영업수익 세부 (억원)", 2); B.txt(r, 7, "(단위 : 억원)", 15); r++;
+  ["구분", "구성", "기목표", "금일", "주간", "월간", "분기", "기"].forEach((h, k) => B.txt(r, k, h, 3)); r++;
+  const dline = (row, sum) => {
+    B.txt(r, 0, row.항목, sum ? 9 : 4); B.txt(r, 1, row.구성 || "", sum ? 9 : 4);
+    B.num(r, 2, row.기목표, sum ? 11 : 6);
+    ["금일", "주간", "월간", "분기", "기"].forEach((p, k) => B.num(r, 3 + k, row[p], sum ? 11 : 6));
+    r++;
+  };
+  for (const row of rep.rows) dline(row, false);
+  dline(rep.total, true);
+  B.txt(r, 0, `* 구간 상한 = 보고일 당일 · 금일 ${P.금일.label} · 주간 ${P.주간.label} · 월간 ${P.월간.label}`, 13); B.merge(r, 0, r, 7); r += 2;
+
+  B.txt(r, 0, "2) 기누적 — 확정 반영 vs 회계마감 전(raw)", 2); r++;
+  ["구분", "기(확정 반영)", "기(회계마감 전·raw)", "차이"].forEach((h, k) => B.txt(r, k, h, 3)); r++;
+  let tG = 0, tR = 0;
+  for (const row of rep.rows) { B.txt(r, 0, row.항목, 4); B.num(r, 1, row.기, 6); B.num(r, 2, row.기raw, 6); B.num(r, 3, (row.기 || 0) - (row.기raw || 0), 6); tG += row.기 || 0; tR += row.기raw || 0; r++; }
+  B.txt(r, 0, "KISI 계", 9); B.num(r, 1, tG, 11); B.num(r, 2, tR, 11); B.num(r, 3, tG - tR, 11); r += 2;
+
+  B.txt(r, 0, "3) 환율", 2); r++;
+  ["항목", "값"].forEach((h, k) => B.txt(r, k, h, 3)); r++;
+  B.txt(r, 0, "기준일 적용환율 (IDR/KRW)", 4); B.num(r, 1, F.fxAsOf, 6); r++;
+  B.txt(r, 0, `* 기누적 환율(회계연도 평균)·주차 고정 적용. 기준일 ${F.asOf}`, 13); B.merge(r, 0, r, 3); r++;
+
+  const cols = [16, 22, 11, 11, 11, 11, 11, 11];
+  return B.xml(cols);
+}
+
 /* 보고양식 그대로 엑셀 만들기 */
 function formToXlsx(F) {
   const B = SheetBuilder();
@@ -1967,7 +2033,11 @@ function formToXlsx(F) {
   }
 
   const cols = [16, 11, 11, 10, 11, 10, 11, 10, 11, 10, 11, 10];
-  return makeXlsx("KISI 일일보고", B.xml(cols));
+  // 두 시트: 일일보고(보고양식) + 세부 일일보고(포켓별 상세·기누적·환율)
+  return makeXlsxMulti([
+    { name: "일일보고", xml: B.xml(cols) },
+    { name: "세부 일일보고", xml: detailSheetXml(F) }
+  ]);
 }
 
 /* PNG 저장 */
