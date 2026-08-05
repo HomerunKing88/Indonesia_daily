@@ -8,7 +8,8 @@
 :root{
   --ink:#16202b; --ink-2:#33455a; --ink-3:#6b7f95;
   --paper:#f2f4f6; --card:#ffffff; --line:#d5dce3; --line-2:#e8edf1;
-  --accent:#1f4e79; --accent-soft:#e8f0f7;
+  --accent:#10b981; --accent-soft:#d1fae5; --accent-ink:#047857;
+  --btn:#16202b; --btn-2:#243447;
   --warn:#b45309; --warn-soft:#fdf3e3;
   --bad:#b02a2a; --bad-soft:#fbeaea;
   --good:#1d6b45; --good-soft:#e7f3ec;
@@ -22,7 +23,7 @@ h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.01em}
 button{font-family:inherit;font-size:12px;cursor:pointer}
 input,select,textarea{font-family:inherit;font-size:12px}
 
-header{background:var(--ink);color:#fff;padding:14px 20px;display:flex;align-items:baseline;gap:16px;flex-wrap:wrap}
+header{background:var(--ink);color:#fff;padding:14px 20px;display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;border-bottom:2px solid var(--accent)}
 header h1{font-size:15px}
 header .sub{color:#9fb2c6;font-size:12px}
 header .stamp{margin-left:auto;font-family:var(--mono);font-size:11px;color:#9fb2c6}
@@ -45,11 +46,13 @@ nav.tabs button .badge.zero{background:#b6c1cb}
 .small{font-size:11.5px}
 
 .drop{border:2px dashed var(--line);padding:26px;text-align:center;color:var(--ink-3);background:#fafbfc}
-.drop.hot{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.drop.hot{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-ink)}
 .drop strong{color:var(--ink);display:block;font-size:14px;margin-bottom:4px}
 
-.btn{background:var(--accent);color:#fff;border:1px solid var(--accent);padding:7px 13px;border-radius:3px}
-.btn.ghost{background:#fff;color:var(--accent)}
+.btn{background:var(--btn);color:#fff;border:1px solid var(--btn);padding:7px 13px;border-radius:3px}
+.btn:hover{background:var(--btn-2);border-color:var(--btn-2)}
+.btn.ghost{background:#fff;color:var(--ink);border-color:var(--line)}
+.btn.ghost:hover{color:var(--accent-ink);border-color:var(--accent)}
 .btn:disabled{opacity:.4;cursor:not-allowed}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
 .field{display:flex;flex-direction:column;gap:3px}
@@ -73,7 +76,7 @@ tr.tot td{background:#e4eaf0;font-weight:600;border-top:2px solid var(--ink-3)}
 .t-bad{background:var(--bad-soft);color:var(--bad)}
 .t-warn{background:var(--warn-soft);color:var(--warn)}
 .t-good{background:var(--good-soft);color:var(--good)}
-.t-info{background:var(--accent-soft);color:var(--accent)}
+.t-info{background:var(--accent-soft);color:var(--accent-ink)}
 td.chg{background:var(--bad-soft);position:relative}
 td.chg::after{content:"";position:absolute;top:1px;right:1px;border:3px solid transparent;border-top-color:var(--bad);border-right-color:var(--bad)}
 td.new{background:var(--good-soft)}
@@ -108,7 +111,7 @@ textarea{width:100%;min-height:280px;border:1px solid var(--line);padding:9px;fo
 .cumbox div:last-child{border-right:none}
 .cumbox span{display:block;font-size:11px;color:var(--ink-3);margin-bottom:3px}
 .cumbox b{font-size:17px;font-family:var(--mono)}
-.cumbox b.hi{color:var(--accent)}
+.cumbox b.hi{color:var(--accent-ink)}
 .acctbox{border:1px solid var(--warn);background:var(--warn-soft);padding:10px 12px;margin-top:10px}
 .acctbox .hd{font-size:12px;font-weight:600;color:var(--warn);margin-bottom:8px}
 .acctbox .field input{background:#fff}
@@ -394,13 +397,13 @@ textarea{width:100%;min-height:280px;border:1px solid var(--line);padding:9px;fo
       관리회계 마감 숫자(원화 억원)를 아래에 넣으면 <b>마감월은 확정치로 고정</b>되고 <b>당월은 마감 전까지 일데이터를 누적</b>합니다.
       관리회계는 추정 → 확정 2단계로, 나중에 확정이 나오면 단계만 바꿔 덮어씁니다.
       값을 비우거나 단계를 '미마감'으로 두면 그 달은 예전처럼 raw로 계산합니다. (금일·주간·월간·M/S·잔고에는 영향 없음)</p>
-    <p class="small" style="background:#f3f7fb;border-left:3px solid #1f4e79;padding:8px 10px;margin-top:6px">
+    <p class="small" style="background:var(--accent-soft);border-left:3px solid var(--accent);padding:8px 10px;margin-top:6px">
       <b>기본값이 이미 들어 있습니다</b>(집계 시트 1~6월 확정). 아래 칸에서 값을 <b>직접 고칠 수 있고</b>,
       고친 뒤 <b>[확정 실적 파일 받기]</b>를 누르면 <code>close_ledger.json</code>으로 저장됩니다.
       다음에 그 파일을 화면에 올리면(또는 [확정 실적 파일 열기]) <b>올린 달만 덮어쓰고 나머지 달은 그대로 유지</b>합니다(병합). 삭제는 표에서 단계를 '미마감'으로 두세요.</p>
   </div>
   <details class="card" id="closeAcc" open>
-    <summary style="cursor:pointer;font-weight:600;color:var(--accent,#1f4e79)">확정 실적 입력 (월 × 포켓, 억원) — 접기/펼치기</summary>
+    <summary style="cursor:pointer;font-weight:600;color:var(--accent-ink,#047857)">확정 실적 입력 (월 × 포켓, 억원) — 접기/펼치기</summary>
     <div id="closeOut" style="margin-top:10px"><div class="empty">회계연도 시작일과 원천을 설정하면 월별 입력칸이 나옵니다.</div></div>
   </details>
   <div class="card">
