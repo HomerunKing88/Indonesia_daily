@@ -2252,18 +2252,17 @@ function recalc() {
 
     const all = Object.keys(LEDGER.데이터).sort();
     const lastRaw = all[all.length - 1];
-    // 기본 보고일의 기준이 되는 '당일 이하 최신 자료일'. 원천에 오늘 이후(미래) 날짜가 있어도 무시한다.
-    const effLast = effLatestDay(all, todayStr());
-    if (!$("#asOf").value) {                       // 기본 보고일 = 당일 이하 최신 자료일의 '다음 날'
-      // → 원천 상한 R = 그 자료일이 되어, 금일은 그 하루만 담는 단일일 보고가 된다.
-      //   미래 날짜 데이터가 있어도 그쪽으로 앞서가지 않고(당일 기준), 주말도 건너뛰지 않는다.
-      //   사용자가 날짜를 그 이후(예: 월요일)로 직접 지정하고 다시 계산하면
-      //   그때 비로소 전주 금·토·일을 담는 주간단위 보고로 확장된다.
-      $("#asOf").value = addDays(effLast, 1);
+    // 기본 보고일 = '오늘'(그날 만든 보고). 원천 상한 R = 전일(막 확정된 날)이 되어,
+    //  오늘 추정치·미래(내일 이후) 예상은 로데이터에 있어도 R로 자동 제외된다.
+    //  단, 데이터가 오래됐으면 최신 자료일+1로 폴백 → asOf = min(오늘, 최신자료일+1).
+    const today = todayStr();
+    const defAsOf = (today < addDays(lastRaw, 1)) ? today : addDays(lastRaw, 1);
+    if (!$("#asOf").value) {
+      $("#asOf").value = defAsOf;
     }
     let asOf = $("#asOf").value;
     if (addDays(asOf, -1) < all[0]) {
-      asOf = addDays(effLast, 1); $("#asOf").value = asOf;
+      asOf = defAsOf; $("#asOf").value = asOf;
       toast(`원장 범위 밖이라 보고일을 ${asOf}로 바꿨습니다.`, "warn");
     }
 
