@@ -930,10 +930,9 @@ function prevReportDay(D) {
 /* 보고일 D 는 원천 D-1 까지를 담는다. 구간 시작도 같은 규칙으로 하루 당긴다. */
 function buildPeriods(ledger, D, fyStart) {
   const fy = fyStart || "2026-01-01";
-  const R = addDays(D, -1);                       // 원천 상한
+  const R = D;                                    // 원천 상한 = 보고일 '당일'(당일 포함). 보고일 이후(내일 이후)는 제외
   const pD = prevReportDay(D);                    // 직전 보고일
-  const lo = addDays(pD, -1);                     // 직전 보고의 원천 상한
-  const dayFrom = addDays(lo, 1);                 // 금일 구간 시작 (월요일은 전주 금요일까지 당겨짐)
+  const dayFrom = addDays(pD, 1);                 // 금일 구간 시작 = 직전 보고일 다음날 (평일=당일 단일, 월요일=토~월)
   // 주간 = 토·일·월·화·수·목·금 (토요일 시작 주). 해당 주 토요일부터.
   const satOfWeek = addDays(D, -((dow(D) + 1) % 7));
   const wkFrom = (satOfWeek < dayFrom) ? satOfWeek : dayFrom;   // 월요일 이월(금·토·일)과 정합
@@ -1016,7 +1015,7 @@ function runChecks(src, ledger, ex, asOf, fx) {
 
   // 6) 기준일 확인
   {
-    const R = addDays(asOf, -1);
+    const R = asOf;                               // 원천 상한 = 보고일 당일
     let last = null; for (const d of all) if (d <= R) last = d;
     if (!last) push("fail", "원천 데이터 없음", `보고일 ${asOf} 기준 원천 상한 ${R} 이하 자료가 없습니다.`);
     else if (last === R) push("pass", "원천 데이터 정상", `보고일 ${asOf} · 원천 상한 ${R} · 원천 최신 ${hi}`);
@@ -1079,7 +1078,7 @@ function runChecks(src, ledger, ex, asOf, fx) {
 
   // 9) 관리회계 확정 실적 반영 상태
   {
-    const Rmk = monthKey(addDays(asOf, -1));
+    const Rmk = monthKey(asOf);
     const fyMk = ($("#fyStart").value || "2026-01-01").slice(0, 7);
     const closed = monthsBetween(fyMk, Rmk).filter(mk => mk !== Rmk && CLOSE.데이터[mk] && CLOSE.데이터[mk].단계);
     const est = closed.filter(mk => CLOSE.데이터[mk].단계 === "추정");
@@ -2252,16 +2251,14 @@ function recalc() {
 
     const all = Object.keys(LEDGER.데이터).sort();
     const lastRaw = all[all.length - 1];
-    // 기본 보고일 = '오늘'(그날 만든 보고). 원천 상한 R = 전일(막 확정된 날)이 되어,
-    //  오늘 추정치·미래(내일 이후) 예상은 로데이터에 있어도 R로 자동 제외된다.
-    //  단, 데이터가 오래됐으면 최신 자료일+1로 폴백 → asOf = min(오늘, 최신자료일+1).
-    const today = todayStr();
-    const defAsOf = (today < addDays(lastRaw, 1)) ? today : addDays(lastRaw, 1);
+    // 기본 보고일 = '오늘 이하 최신 자료일'. 보고일 당일(R)까지 포함하므로 그날이 곧 원천 상한.
+    //  오늘 이후(내일 이후) 예상 데이터는 로데이터에 있어도 여기서 제외(오늘 이하만 고름).
+    const defAsOf = effLatestDay(all, todayStr());
     if (!$("#asOf").value) {
       $("#asOf").value = defAsOf;
     }
     let asOf = $("#asOf").value;
-    if (addDays(asOf, -1) < all[0]) {
+    if (asOf < all[0]) {
       asOf = defAsOf; $("#asOf").value = asOf;
       toast(`원장 범위 밖이라 보고일을 ${asOf}로 바꿨습니다.`, "warn");
     }
@@ -2284,9 +2281,9 @@ function recalc() {
     const mi = $("#modeInfo");
     if (mi) mi.innerHTML = `${asOf}(${wkName}) · <b>${mode}</b> 기준` +
       (mode === "추정" ? (estHas ? " · 추정 파일 값 사용" : " · <span class='tag t-bad'>추정 파일에 이 날짜 없음 → 원천으로 계산</span>") : "") +
-      ` · 원천 상한 ${addDays(asOf, -1)}`;
+      ` · 원천 상한 ${asOf}`;
 
-    const checks = runChecks(SRCPARSE, LEDGER, ex, asOf, fxOf(addDays(asOf, -1)));
+    const checks = runChecks(SRCPARSE, LEDGER, ex, asOf, fxOf(asOf));
     const wk = weeklyCheck(LEDGER, asOf, fxOf, thr);
     const rep = buildReport(LEDGER, asOf, fxOf, fyStart, mode, $("#fillGap").value === "1");
     RESULT = { ledger: LEDGER, changes: m.changes, added: m.added, newDates: m.newDates, ex, checks, wk, rep, asOf, fx, fxOf, ser: FXSERIES };
