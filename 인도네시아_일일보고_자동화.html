@@ -865,27 +865,45 @@ function prevDataDay(ledger, d) {
   return hit;
 }
 
-/* 이자성 항목 보정: 원장 최신일자 이후 구간은 마지막 값이 하루씩 더 발생한 것으로 본다.
-   현지법인이 주말·연휴 자료를 아직 보내지 않은 월요일 보고에서 쓴다. */
-function sumEokCarry(ledger, code, from, to, fxOf) {
-  const all = Object.keys(ledger.데이터).sort();
-  const last = all[all.length - 1];
-  let s = sumEok(ledger, code, from, to, fxOf);
-  if (to <= last) return s;
-  const base = stockAt(ledger, code, last);
-  if (!base) return s;
-  const f = fxOf(last); if (!f || !isFinite(f)) return s;
-  let extra = 0;
-  for (let d = addDays(last, 1); d <= to; d = addDays(d, 1)) if (d >= from) extra++;
-  return s + extra * (base.값 / 1e6 / f / 100);
+/* ── 주말/미도착일 처리 규칙(사용자 확정, 통합) ─────────────────────────────
+   토·일은 '직전 금요일' 값을 그대로 쓰되 BK·AM·IB FEE·SW 는 0.
+   (신용·예금·IB BOOK·기타·미수·주담 등 이자·평가성 항목만 금요일 값 유지)
+   원장 최신일자 이후 아직 자료가 안 온 평일도 같은 취지로 이월(이자·평가성만, 거래성은 0). */
+const WEEKEND_ZERO = new Set(["bk", "am", "ib_fee", "sw"]);   // 주말·이월 시 0으로 보는 거래성 항목(코드)
+function lastDataDay(ledger) { let m = null; for (const k in ledger.데이터) if (m === null || k > m) m = k; return m; }
+function friBefore(ledger, d) {                              // 토→전일(금), 일→이틀전(금); 없으면 직전 자료일
+  let fri = dow(d) === 6 ? addDays(d, -1) : addDays(d, -2);
+  if (!ledger.데이터[fri]) fri = prevDataDay(ledger, d);
+  return fri;
 }
-const CARRY_ROWS = ["신용", "예금", "SW", "IB BOOK", "기타"];   // 이자·평가성 항목
+/* 일자 d·항목 code 의 원천 flow(IDR). 주말·미도착 평일은 규칙으로 합성. 과거 결측(휴일)은 null → 합산 제외 */
+function dayFlowRaw(ledger, code, d) {
+  const w = dow(d), zero = WEEKEND_ZERO.has(code);
+  if (w === 6 || w === 0) {                                 // 토·일
+    if (zero) return 0;
+    const fri = friBefore(ledger, d);
+    const r = fri ? ledger.데이터[fri] : null;
+    return (r && typeof r[code] === "number") ? r[code] : 0;
+  }
+  const r = ledger.데이터[d];
+  if (r && typeof r[code] === "number") return r[code];     // 평일 자료 있음 → 그대로
+  if (d > lastDataDay(ledger)) {                            // 원장 최신 이후 미도착 평일
+    if (zero) return 0;
+    const b = stockAt(ledger, code, lastDataDay(ledger));
+    return b ? b.값 : 0;
+  }
+  return null;                                              // 과거 결측(휴일 등)
+}
+
+/* 규칙 통합 후: 이월은 dayFlowRaw 안에서 처리하므로 sumEokCarry 는 sumEok 과 동일 동작 */
+function sumEokCarry(ledger, code, from, to, fxOf) { return sumEok(ledger, code, from, to, fxOf); }
+const CARRY_ROWS = ["신용", "예금", "SW", "IB BOOK", "기타"];   // (하위호환용 참조; 이월 판단은 dayFlowRaw 로 이동)
 
 function sumEok(ledger, code, from, to, fxOf) {
   let s = 0;
-  for (const d of Object.keys(ledger.데이터)) {
-    if (d < from || d > to) continue;
-    const v = ledger.데이터[d][code];
+  // 날짜 범위를 하루씩 훑어 주말·미도착일은 dayFlowRaw 규칙으로 합성한다.
+  for (let d = from; d <= to; d = addDays(d, 1)) {
+    const v = dayFlowRaw(ledger, code, d);
     const f = fxOf(d);
     if (typeof v === "number" && f && isFinite(f)) s += v / 1e6 / f / 100;
   }
@@ -916,14 +934,15 @@ function buildPeriods(ledger, D, fyStart) {
   const pD = prevReportDay(D);                    // 직전 보고일
   const lo = addDays(pD, -1);                     // 직전 보고의 원천 상한
   const dayFrom = addDays(lo, 1);                 // 금일 구간 시작 (월요일은 전주 금요일까지 당겨짐)
-  // 주간 시작은 '해당 주 월요일-1'이되, 금일이 더 과거를 담으면(월요일 금·토·일) 그만큼 포함한다
-  const wkFrom = (addDays(mondayOf(D), -1) < dayFrom) ? addDays(mondayOf(D), -1) : dayFrom;
+  // 주간 = 토·일·월·화·수·목·금 (토요일 시작 주). 해당 주 토요일부터.
+  const satOfWeek = addDays(D, -((dow(D) + 1) % 7));
+  const wkFrom = (satOfWeek < dayFrom) ? satOfWeek : dayFrom;   // 월요일 이월(금·토·일)과 정합
   return {
     원천상한: R, 직전보고일: pD,
     금일: { from: dayFrom, to: R, label: `${dayFrom} ~ ${R}` },
     주간: { from: wkFrom, to: R, label: `${wkFrom} ~ ${R}` },
-    월간: { from: addDays(firstOfMonth(D), -1), to: R, label: `${addDays(firstOfMonth(D),-1)} ~ ${R}` },
-    분기: { from: addDays(firstOfQuarter(D), -1), to: R, label: `${addDays(firstOfQuarter(D),-1)} ~ ${R}` },
+    월간: { from: firstOfMonth(D), to: R, label: `${firstOfMonth(D)} ~ ${R}` },
+    분기: { from: firstOfQuarter(D), to: R, label: `${firstOfQuarter(D)} ~ ${R}` },
     기: { from: fy, to: R, label: `${fy} ~ ${R}` }
   };
 }
