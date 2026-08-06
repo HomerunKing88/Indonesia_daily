@@ -818,14 +818,17 @@ function makeFxOf(ser, apply, asOf, fallback) {
     return hit ? hit.기누적환율 : null;
   };
   const prevWeekEnd = d => addDays(mondayOf(d), -1);   // 직전 주 일요일 이하 최근 데이터일
+  const satOf = d => addDays(d, -((dow(d) + 1) % 7));  // 해당 주 토요일(주간 정의 = 토~금)
   const cache = {};
   const missing = new Set();
   const fn = d => {
     if (cache[d] != null) return cache[d];
     let v = null;
-    if (apply === "asof") v = at(prevWeekEnd(asOf)) || at(asOf);
+    if (apply === "asof") v = at(addDays(satOf(asOf), -1)) || at(asOf);
+    // 주차고정: 주간 정의(토~금)와 동일 주로 고정 → 해당 주 토요일 직전 영업일 기준.
+    // (주말 토·일도 뒤따르는 평일과 같은 주 환율을 쓴다: 정답지 방식)
     else if (apply === "day") v = at(d);
-    else v = at(prevWeekEnd(d)) || at(d);
+    else v = at(addDays(satOf(d), -1)) || at(d);
     if (v == null) {
       // 연초 휴일(예: 1/1)처럼 환율이 없는 날은 가장 이른 기누적환율로 앞채우고 경고하지 않는다.
       v = (firstCum != null) ? firstCum : fallback;
@@ -876,8 +879,13 @@ function friBefore(ledger, d) {                              // 토→전일(금
   if (!ledger.데이터[fri]) fri = prevDataDay(ledger, d);
   return fri;
 }
+/* 보고일(당일)은 원본 추정치 대신 '전일 확정치'를 이월한다(정답지 방식).
+   REPORT_DAY 가 설정된 계산에서만 적용되고, 계산 종료 시 해제한다. */
+let REPORT_DAY = null, REPORT_PREV = null;
 /* 일자 d·항목 code 의 원천 flow(IDR). 주말·미도착 평일은 규칙으로 합성. 과거 결측(휴일)은 null → 합산 제외 */
 function dayFlowRaw(ledger, code, d) {
+  if (REPORT_DAY && d === REPORT_DAY && REPORT_PREV)      // 당일 = 직전 보고일(전일 확정) 값 이월
+    return dayFlowRaw(ledger, code, REPORT_PREV);
   const w = dow(d), zero = WEEKEND_ZERO.has(code);
   if (w === 6 || w === 0) {                                 // 토·일
     const rw = ledger.데이터[d];
@@ -937,9 +945,9 @@ function buildPeriods(ledger, D, fyStart) {
   const Rcum = D;                                 // 누적(주간·월간·분기·기) 상한 = 당일(추정 포함)
   const pD = prevReportDay(D);                    // 직전 보고일
   const dayFrom = pD;                             // 금일 시작 (평일=전일 단일, 월요일=금·토·일)
-  // 주간 = 토요일 시작 주. 해당 주 토요일부터(월요일 이월과 정합)
-  const satOfWeek = addDays(D, -((dow(D) + 1) % 7));
-  const wkFrom = (satOfWeek < dayFrom) ? satOfWeek : dayFrom;
+  // 주간 = 토요일 시작 주(토~금). 항상 해당 주 토요일부터.
+  // (월요일 보고 시 dayFrom=직전 금요일이 되어도 주간은 이번 주 토요일부터여야 전주 금요일 중복계상이 없음)
+  const wkFrom = addDays(D, -((dow(D) + 1) % 7));  // 해당 주 토요일
   return {
     원천상한: Rday, 누적상한: Rcum, 직전보고일: pD,
     금일: { from: dayFrom, to: Rday, label: `${dayFrom} ~ ${Rday}` },
@@ -1176,6 +1184,7 @@ function blendEok(ledger, rname, codes, startMk, R, fxOf, carry) {
 /* ---------- 보고표 ---------- */
 function buildReport(ledger, D, fxOf, fyStart, mode, fillGap) {
   const P = buildPeriods(ledger, D, fyStart);
+  REPORT_DAY = D; REPORT_PREV = P.직전보고일;               // 당일(D) flow = 전일 확정치 이월(금일·누적 공통)
   const order = MAP["보고표_행순서"];
   const tgt = MAP["보고표_기목표_억원"];
   const byRow = {};
@@ -1216,6 +1225,7 @@ function buildReport(ledger, D, fxOf, fyStart, mode, fillGap) {
   tot.기raw = out.reduce((a, r) => a + (r.기raw || 0), 0);
   tot.원천금일 = out.reduce((a, r) => a + (r.원천금일 || 0), 0);
   if (out.some(r => r.추정금일 != null)) tot.추정금일 = out.reduce((a, r) => a + (r.추정금일 != null ? r.추정금일 : r.원천금일), 0);
+  REPORT_DAY = null; REPORT_PREV = null;                  // 당일 이월 규칙 해제(잔고·주차점검 등에 누출 방지)
   return { rows: out, total: tot, periods: P, mode: useEst ? "추정" : "원천", 추정있음: !!est, 혼합: blended };
 }
 
