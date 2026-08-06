@@ -1665,6 +1665,9 @@ function renderForm(F) {
   const box = $("#formSheet"); box.innerHTML = "";
   const P = F.P, rep = F.rep, i = F.inp;
   let h = "";
+  // 열너비 고정: 구분·기목표 + 5구간×(실적/달성률) 10열을 동일폭으로 정렬
+  const CG5 = `<colgroup><col style="width:13%"><col style="width:9%">${'<col style="width:7.8%">'.repeat(10)}</colgroup>`;
+  const TF = ' style="table-layout:fixed"';
   h += `<div class="fh">아시아사업담당 일일보고 (KISI)　기준일 ${F.asOf}</div>`;
   if (F.mode === "추정") h += `<div class="fn" style="margin-bottom:6px">* 손익은 주간 추정 파일 기준, 잔고·계좌수·M/S는 원천 ${F.R} 기준</div>`;
   if (!Object.keys(FXLED.데이터).length)
@@ -1672,7 +1675,7 @@ function renderForm(F) {
 
   // 1) 순영업수익 현황
   h += `<div class="fs">1) 순영업수익 현황</div><div class="fu">(단위 : 억원, %)　적용환율 ${F.fxAsOf.toFixed(6)} IDR/KRW</div>`;
-  h += `<table><thead>
+  h += `<table${TF}>${CG5}<thead>
     <tr><th class="l" rowspan="2">구분</th><th rowspan="2">기목표</th>
       <th colspan="2">금일</th><th colspan="2">주간</th><th colspan="2">월간</th><th colspan="2">분기</th><th colspan="2">기</th></tr>
     <tr><th>실적</th><th>달성률</th><th>실적</th><th>달성률</th><th>실적</th><th>달성률</th><th>실적</th><th>달성률</th><th>실적</th><th>달성률</th></tr>
@@ -1692,7 +1695,7 @@ function renderForm(F) {
 
   // 2) 외형 / KPI
   h += `<div class="fs">2) 외형 / KPI</div><div class="fu">(단위 : 억원, %)</div>`;
-  h += `<table><thead>
+  h += `<table${TF}>${CG5}<thead>
     <tr><th class="l" rowspan="2">구분</th><th rowspan="2">기목표</th>
       <th colspan="2">금일</th><th colspan="2">주간</th><th colspan="2">월간</th><th colspan="2">분기</th><th colspan="2">기</th></tr>
     <tr><th>실적</th><th>달성률</th><th>실적</th><th>달성률</th><th>실적</th><th>달성률</th><th>실적</th><th>달성률</th><th>실적</th><th>달성률</th></tr>
@@ -1709,7 +1712,7 @@ function renderForm(F) {
 
   // 3) 신용대출 현황
   h += `<div class="fs">3) KISI 신용대출 현황</div><div class="fu">(단위 : 억원, %)</div>`;
-  h += `<table><thead><tr><th class="l" colspan="2">구분</th><th>금일</th><th>전일</th><th>전월말</th><th>전년말</th><th>가중평균금리</th></tr></thead><tbody>`;
+  h += `<table${TF}><colgroup><col style="width:8%"><col style="width:15%"><col style="width:15.4%"><col style="width:15.4%"><col style="width:15.4%"><col style="width:15.4%"><col style="width:15.4%"></colgroup><thead><tr><th class="l" colspan="2">구분</th><th>금일</th><th>전일</th><th>전월말</th><th>전년말</th><th>가중평균금리</th></tr></thead><tbody>`;
   const b = F.bal;
   h += `<tr><td class="l" rowspan="3">여신</td><td class="l">신용</td><td>${nfmt(b.금일.신용,0)}</td><td>${nfmt(b.전일.신용,0)}</td><td>${nfmt(b.전월말.신용,0)}</td><td>${nfmt(b.전년말.신용,0)}</td><td>${i.rMargin==null?"-":(i.rMargin*100).toFixed(2)+"%"}</td></tr>`;
   h += `<tr><td class="l">대출</td><td>${nfmt(b.금일.대출,0)}</td><td>${nfmt(b.전일.대출,0)}</td><td>${nfmt(b.전월말.대출,0)}</td><td>${nfmt(b.전년말.대출,0)}</td><td>${i.rLoan==null?"-":(i.rLoan*100).toFixed(2)+"%"}</td></tr>`;
@@ -1719,7 +1722,7 @@ function renderForm(F) {
 
   // 계좌수
   h += `<div class="fs">4) 계좌수 현황</div><div class="fu">(단위 : 좌)</div>`;
-  h += `<table><thead><tr><th class="l">구분</th><th>FY25</th><th>기준일</th><th>목표</th><th>증감</th><th>일간 증감</th></tr></thead><tbody>`;
+  h += `<table${TF}><colgroup><col style="width:24%">${'<col style="width:15.2%">'.repeat(5)}</colgroup><thead><tr><th class="l">구분</th><th>FY25</th><th>기준일</th><th>목표</th><th>증감</th><th>일간 증감</th></tr></thead><tbody>`;
   const a = F.acct;
   h += `<tr><td class="l">총 계좌수</td><td>${nfmt(i.acFY,0)}</td><td>${nfmt(a.총계좌,0)}</td><td>${nfmt(i.acT,0)}</td>
     <td>${nfmt(a.총계좌!=null&&i.acFY!=null?a.총계좌-i.acFY:null,0)}</td>
