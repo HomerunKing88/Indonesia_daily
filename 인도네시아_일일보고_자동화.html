@@ -2401,10 +2401,10 @@ function recalc() {
       $("#asOf").value = defAsOf;
     }
     let asOf = $("#asOf").value;
-    if (asOf < all[0]) {
-      asOf = defAsOf; $("#asOf").value = asOf;
-      toast(`원장 범위 밖이라 보고일을 ${asOf}로 바꿨습니다.`, "warn");
-    }
+    // 보고일은 사용자가 지정한 날짜를 그대로 따른다(과거·미래 모두 허용). 임의로 바꾸지 않고 상태줄에 안내만 한다.
+    let asOfNote = "";
+    if (asOf && asOf < all[0]) asOfNote = ` · <span class='tag t-bad'>원장 시작일(${all[0]}) 이전 — 실적이 비어 있을 수 있음</span>`;
+    else if (asOf && asOf > all[all.length - 1]) asOfNote = ` · <span class='tag t-warn'>원천 최신일자(${all[all.length - 1]}) 이후 — 자료 없는 날은 직전 영업일 값으로 이월</span>`;
 
     const fx = effFallbackFx();
     const thr = parseFloat($("#thr").value) || 0.10;
@@ -2427,7 +2427,7 @@ function recalc() {
     const mi = $("#modeInfo");
     if (mi) mi.innerHTML = `${asOf}(${wkName}) · <b>${mode}</b> 기준` +
       (mode === "추정" ? (estHas ? " · 추정 파일 값 사용" : " · <span class='tag t-bad'>추정 파일에 이 날짜 없음 → 원천으로 계산</span>") : "") +
-      ` · 금일상한 ${addDays(asOf, -1)} · 누적상한 ${asOf}`;
+      ` · 금일상한 ${addDays(asOf, -1)} · 누적상한 ${asOf}` + asOfNote;
 
     const checks = runChecks(SRCPARSE, LEDGER, ex, asOf, fxOf(addDays(asOf, -1)));
     const wk = weeklyCheck(LEDGER, asOf, fxOf, thr);
