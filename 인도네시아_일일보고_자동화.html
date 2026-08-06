@@ -893,6 +893,12 @@ function dayFlowRaw(ledger, code, d) {
   if (w === 6 || w === 0) {                                 // 토·일
     if (code === "am") {                                    // AM 특례: 주말=관리보수(AM Rev) 상수 이월
       // 원천 AM Rev(row81)는 주말에 0(소스 미posting) → 직전 영업일 am_fee 이월, 거래성 채권손익은 0.
+      // 단, 정답지(백파일)는 daily를 '금주+전주'만 유지하며 그 범위 주말에만 상수를 채운다.
+      // 그 이전(미확정월의 오래된) 주말은 0(월 마감 확정 시 정정) → 보고 윈도 밖은 채우지 않는다.
+      if (REPORT_DAY) {
+        const winStart = addDays(addDays(REPORT_DAY, -((dow(REPORT_DAY) + 1) % 7)), -7); // 전주 토요일
+        if (d < winStart) return 0;
+      }
       const fri = friBefore(ledger, d);
       const r = fri ? ledger.데이터[fri] : null;
       return (r && typeof r["am_fee"] === "number") ? r["am_fee"] : 0;
