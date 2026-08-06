@@ -1674,7 +1674,13 @@ function renderForm(F) {
     h += `<div class="fxwarn">고시환율이 적재되지 않아 대체 환율로 환산한 값입니다. 이 상태로 보고하지 마세요.</div>`;
 
   // 1) 순영업수익 현황
-  h += `<div class="fs">1) 순영업수익 현황</div><div class="fu">(단위 : 억원, %)　적용환율 ${F.fxAsOf.toFixed(6)} IDR/KRW</div>`;
+  // 적용환율 설명: 무슨 환율(기누적)·어느 기간 기준인지 함께 표기
+  const _apply = (($("#fxApply") || {}).value) || "week";
+  const _basis = addDays(addDays(F.asOf, -((dow(F.asOf) + 1) % 7)), -1);  // 해당 주 토요일 직전일(전주말)
+  const fxDesc = _apply === "day" ? "일자별 기누적환율"
+    : _apply === "asof" ? `기준일(${F.asOf}) 기누적환율`
+    : `기누적환율 · 주차고정 · 전주말 ${_basis}까지`;
+  h += `<div class="fs">1) 순영업수익 현황</div><div class="fu">(단위 : 억원, %)　적용환율 ${F.fxAsOf.toFixed(6)} IDR/KRW (${fxDesc})</div>`;
   h += `<table${TF}>${CG5}<thead>
     <tr><th class="l" rowspan="2">구분</th><th rowspan="2">기목표</th>
       <th colspan="2">금일</th><th colspan="2">주간</th><th colspan="2">월간</th><th colspan="2">분기</th><th colspan="2">기</th></tr>
@@ -2259,7 +2265,11 @@ function renderClose() {
   const box = $("#closeOut"); if (!box) return 0;
   const fy = $("#fyStart").value || "2026-01-01";
   const curMk = closeCurMonthKey();
-  const months = monthsBetween(monthKey(fy), curMk);
+  // 회계연도 12개월(예: 1~12월)치 입력란을 미리 만들어 둔다. 당월 이후(미래)는 빈 미마감 슬롯.
+  const fyMk = monthKey(fy);
+  const _n = Number(fyMk.slice(0, 4)) * 12 + Number(fyMk.slice(5, 7)) - 1 + 11;   // fy 시작월 + 11개월 = 회계연도 말월
+  const fyEndMk = `${Math.floor(_n / 12)}-${String(_n % 12 + 1).padStart(2, "0")}`;
+  const months = monthsBetween(fyMk, fyEndMk);
   if (!months.length) { box.innerHTML = "<div class='empty'>월 범위를 계산할 수 없습니다.</div>"; return 0; }
   let h = "<p class='small muted' style='margin:0 0 6px'>※ 집계 시트 기준 1~3월 확정은 1월 행에 합산 기재됩니다(2·3월 0). 마감월 합계(회계마감 기준 기누적)는 맨 아래 <b>확정 누적</b> 행에 표시됩니다.</p>";
   h += "<div class='scroll'><table><thead><tr><th class='l'>월</th><th>단계</th>";
