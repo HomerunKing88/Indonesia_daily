@@ -1147,10 +1147,10 @@ function runChecks(src, ledger, ex, asOf, fx) {
 
 /* ---------- 주간 목표 점검 ---------- */
 function weeklyCheck(ledger, asOf, fxOf, thr) {
-  // 직전 완료 주차(월~금) 기준. 기준일이 금요일 이후면 금주도 완료로 간주.
-  const mon = mondayOf(asOf);
-  const doneMon = dow(asOf) >= 5 ? mon : addDays(mon, -7);
-  const doneFri = addDays(doneMon, 4), doneSun = addDays(doneMon, 6);
+  // 주간 정의는 보고와 동일하게 '토~금'. 기준일이 금요일이면 그 주가 완료된 것으로 본다.
+  const curSat = addDays(asOf, -((dow(asOf) + 1) % 7));           // 이번 주 토요일
+  const doneSat = dow(asOf) === 5 ? curSat : addDays(curSat, -7); // 직전 완료주차 토요일
+  const doneFri = addDays(doneSat, 6);                            // 그 주 금요일(주 마지막 날)
   const groups = {};
   for (const it of MAP["항목"]) {
     if (!it["보고행"] && it["분류"] !== "이자") continue;
@@ -1164,25 +1164,28 @@ function weeklyCheck(ledger, asOf, fxOf, thr) {
   for (const g of Object.keys(groups)) {
     const G = groups[g];
     let actEok = 0;
-    for (const k of G.코드) actEok += sumEok(ledger, k, doneMon, doneSun, fxOf);
-    const fxW = fxOf(doneSun);
+    for (const k of G.코드) actEok += sumEok(ledger, k, doneSat, doneFri, fxOf);
+    const fxW = fxOf(doneFri);
     const tgtEok = G.목표 / 52 / fxW / 100;
     const dev = tgtEok ? (actEok - tgtEok) / tgtEok : null;
     rows.push({ 그룹: g, 실적: actEok, 목표: tgtEok, 목표대비: dev, 확인대상: dev != null && Math.abs(dev) >= thr });
   }
   rows.sort((a, b) => Math.abs(b.목표대비 || 0) - Math.abs(a.목표대비 || 0));
 
-  // 금주 진행분(참고)
+  // 금주 진행분(참고). 보고서와 같은 기준이 되도록 '당일 = 전일 확정치 이월' 규칙을 적용한다.
+  REPORT_DAY = asOf; REPORT_PREV = prevReportDay(asOf);
   const cur = [];
   for (const g of Object.keys(groups)) {
     const G = groups[g];
     let actEok = 0;
-    for (const k of G.코드) actEok += sumEok(ledger, k, mon, asOf, fxOf);
-    const elapsed = (new Date(asOf + "T00:00:00Z") - new Date(mon + "T00:00:00Z")) / 86400000 + 1;
+    for (const k of G.코드) actEok += sumEok(ledger, k, curSat, asOf, fxOf);
+    const elapsed = (new Date(asOf + "T00:00:00Z") - new Date(curSat + "T00:00:00Z")) / 86400000 + 1;
     const tgtEok = G.목표 / 52 / fxOf(asOf) / 100 * (elapsed / 7);
     cur.push({ 그룹: g, 실적: actEok, 목표: tgtEok, 목표대비: tgtEok ? (actEok - tgtEok) / tgtEok : null, 경과: elapsed });
   }
-  return { 기간: `${doneMon} ~ ${doneSun}`, 완료주차: rows, 금주: cur, 금주기간: `${mon} ~ ${asOf}` };
+  REPORT_DAY = null; REPORT_PREV = null;      // 이월 규칙 해제(다른 계산에 누출 방지)
+  return { 기간: `${doneSat} ~ ${doneFri}`, 완료주차: rows, 금주: cur,
+           금주기간: `${curSat} ~ ${asOf}`, 금주경과: (new Date(asOf + "T00:00:00Z") - new Date(curSat + "T00:00:00Z")) / 86400000 + 1 };
 }
 
 /* ================= 관리회계 확정 실적 원장 =================
@@ -1368,8 +1371,9 @@ function renderWeekly(w, thr) {
   const box = $("#wkOut"); box.innerHTML = "";
   const flagged = w.완료주차.filter(r => r.확인대상);
   const head = el("div", "card");
-  head.innerHTML = `<h3>직전 완료 주차 ${w.기간}</h3>
-    <p class='small'>주간 목표는 연간 목표를 52주로 나눈 값입니다. 실적이 목표 대비 ±${(thr*100).toFixed(0)}% 밖이면 현지법인 확인 대상으로 표시합니다.</p>`;
+  head.innerHTML = `<h3>주간 목표 점검 · 주간은 <b>토~금</b> 기준</h3>
+    <p class='small'>아래 두 표를 봅니다. ① <b>지난주 마감 실적</b>(${w.기간}, 토~금 7일 전체가 끝난 주) ② <b>이번주 진행 실적</b>(${w.금주기간}, ${w.금주경과}일 경과).
+    주간 목표는 연간 목표를 52주로 나눈 값이며, 실적이 목표 대비 ±${(thr*100).toFixed(0)}% 밖이면 현지법인 확인 대상으로 표시합니다.</p>`;
   box.appendChild(head);
 
   if (flagged.length) {
@@ -1394,8 +1398,16 @@ function renderWeekly(w, thr) {
     }
     h += "</tbody>"; t.innerHTML = h; c.appendChild(t); return c;
   };
-  box.appendChild(mk(w.완료주차, "완료 주차 대비", null));
-  box.appendChild(mk(w.금주, `금주 진행분 ${w.금주기간} (참고)`, "경과 일수만큼 목표를 환산한 참고치입니다. 주 마감 후 확정 비교하세요."));
+  box.appendChild(mk(w.완료주차, `① 지난주 마감 실적 vs 주간 목표 · ${w.기간} (토~금)`,
+    "주가 끝난 뒤의 확정 비교입니다. 여기서 벗어난 수익원을 현지법인에 확인하세요."));
+  if (w.금주기간 === w.기간) {
+    // 보고일이 금요일이면 이번주가 오늘 마감되어 ①과 같은 주가 된다(중복 표 생략).
+    box.appendChild(el("div", "chk pass",
+      `<b>이번주는 오늘(${w.금주기간.split(" ~ ")[1]}, 금) 마감되었습니다</b><div class='d'>위 ① 표가 곧 이번주 확정 실적입니다. 진행분 표는 따로 표시하지 않습니다.</div>`));
+  } else {
+    box.appendChild(mk(w.금주, `② 이번주 진행 실적 vs 경과 환산 목표 · ${w.금주기간} (토~금 중 ${w.금주경과}일 경과)`,
+      `주간 목표를 경과 일수(${w.금주경과}/7)만큼 환산해 비교한 참고치입니다. 아직 주가 끝나지 않았으니 확정 판단은 주 마감 후에 하세요.`));
+  }
 }
 
 /* 월별 기누적 요약: 각 월의 평균 고시환율과, 그 달 마지막 입력일 기준 기누적 */
