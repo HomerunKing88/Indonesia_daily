@@ -534,18 +534,25 @@ let RESULT = null;      // 계산 결과 캐시
 /* ---------- 유틸 ---------- */
 const $ = s => document.querySelector(s);
 const el = (t, c, h) => { const e = document.createElement(t); if (c) e.className = c; if (h != null) e.innerHTML = h; return e; };
-const iso = d => {
-  const z = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  if (d instanceof Date && !isNaN(d)) return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-  return null;
+/* 엑셀 날짜 셀(Date) → 'YYYY-MM-DD'.
+   SheetJS는 시간대·직렬값 변환 오차 때문에 날짜를 자정 직전으로 만들기도 한다
+   (예: KST에서 2026-08-07 이 '2026-08-06 23:59:08' 로 생성 → 하루 밀림).
+   따라서 '가장 가까운 자정'으로 반올림한 뒤 로컬 성분으로 읽는다. 시간대와 무관하게 같은 날짜가 나온다. */
+const dayLocal = d => {
+  if (!(d instanceof Date) || isNaN(d)) return null;
+  const t = new Date(d.getTime());
+  if (t.getHours() >= 12) t.setDate(t.getDate() + 1);   // 자정 직전이면 다음 날로 반올림
+  t.setHours(0, 0, 0, 0);
+  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
 };
+const iso = d => dayLocal(d);
 const isoUTC = d => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())).toISOString().slice(0, 10);
 const num = (v, d = 2) => (v == null || isNaN(v)) ? "" : Number(v).toLocaleString("ko-KR", { minimumFractionDigits: d, maximumFractionDigits: d });
 const pct = v => (v == null || isNaN(v) || !isFinite(v)) ? "" : (v * 100).toFixed(1) + "%";
 const norm = s => (s == null ? "" : String(s).trim().replace(/\s+/g, " "));
 
 function dstr(x) {
-  if (x instanceof Date) return isoUTC(x);
+  if (x instanceof Date) return dayLocal(x);   // 시간대·자정오차 보정(dayLocal)
   if (typeof x === "number") { const d = XLSX.SSF.parse_date_code(x); return d ? `${d.y}-${String(d.m).padStart(2,"0")}-${String(d.d).padStart(2,"0")}` : null; }
   if (typeof x === "string" && /^\d{4}-\d{2}-\d{2}/.test(x)) return x.slice(0, 10);
   return null;
