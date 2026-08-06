@@ -1212,13 +1212,17 @@ function hasCloseInRange(startMk, Rmk) {
   return false;
 }
 /* 분기/기누적 = Σ(마감월 확정 억원) + Σ(미마감월 raw) + 당월 일누적 */
-function blendEok(ledger, rname, codes, startMk, R, fxOf, carry) {
+function blendEok(ledger, rname, codes, startMk, R, fxOf, carry, estAdd) {
   const Rmk = monthKey(R);
+  // 추정 모드에서 보고일 당일값이 추정치로 주어지면, 당월 일누적은 '전일까지' 더하고 당일은 추정치를 얹는다.
+  const upper = (estAdd != null) ? addDays(R, -1) : R;
   let total = 0;
   for (const mk of monthsBetween(startMk, Rmk)) {
-    if (mk === Rmk) {                                  // 당월: 월 1일 ~ R 일누적
-      for (const c of codes) total += carry ? sumEokCarry(ledger, c, firstOfMonthKey(mk), R, fxOf)
-                                            : sumEok(ledger, c, firstOfMonthKey(mk), R, fxOf);
+    if (mk === Rmk) {                                  // 당월: 월 1일 ~ upper 일누적 (+ 당일 추정치)
+      if (upper >= firstOfMonthKey(mk))
+        for (const c of codes) total += carry ? sumEokCarry(ledger, c, firstOfMonthKey(mk), upper, fxOf)
+                                              : sumEok(ledger, c, firstOfMonthKey(mk), upper, fxOf);
+      if (estAdd != null) total += estAdd;
     } else {
       const cv = closeVal(rname, mk);
       if (cv != null) total += cv;                     // 마감월: 확정/추정 억원 그대로
@@ -1250,14 +1254,20 @@ function buildReport(ledger, D, fxOf, fyStart, mode, fillGap) {
     const codes = byRow[rname] || [];
     const rec = { 항목: rname, 기목표: tgt[rname] != null ? tgt[rname] : null, 구성: codes.map(c => itemByCode(c).이름).join("+") };
     const carry = fillGap && CARRY_ROWS.includes(rname);
+    // 추정 모드: 보고일 당일값은 추정 파일 값을 쓴다. 금일뿐 아니라 누적(주간·월간·분기·기)에도 동일하게 반영.
+    const ev = (est && typeof est[rname] === "number") ? est[rname] : null;
     for (const p of ["금일", "주간", "월간", "분기", "기"]) {
       // 분기·기누적은 마감월 확정치 + 당월 일누적으로 산출 (확정 데이터가 있을 때만)
-      if (p === "분기" && blendQ) { rec[p] = blendEok(ledger, rname, codes, qStartMk, Rcum, fxOf, carry); blended = true; continue; }
-      if (p === "기" && blendY) { rec[p] = blendEok(ledger, rname, codes, fyStartMk, Rcum, fxOf, carry); blended = true; continue; }
+      if (p === "분기" && blendQ) { rec[p] = blendEok(ledger, rname, codes, qStartMk, Rcum, fxOf, carry, ev); blended = true; continue; }
+      if (p === "기" && blendY) { rec[p] = blendEok(ledger, rname, codes, fyStartMk, Rcum, fxOf, carry, ev); blended = true; continue; }
+      // 누적 구간(상한 = 보고일)은 추정치가 있으면 '전일까지 합 + 당일 추정치'
+      const cum = (ev != null && P[p].to === Rcum);
+      const upper = cum ? addDays(P[p].to, -1) : P[p].to;
       let s = 0;
-      for (const c of codes) s += carry ? sumEokCarry(ledger, c, P[p].from, P[p].to, fxOf)
-                                        : sumEok(ledger, c, P[p].from, P[p].to, fxOf);
-      rec[p] = s;
+      if (upper >= P[p].from)
+        for (const c of codes) s += carry ? sumEokCarry(ledger, c, P[p].from, upper, fxOf)
+                                          : sumEok(ledger, c, P[p].from, upper, fxOf);
+      rec[p] = s + (cum ? ev : 0);
     }
     // 회계마감 이전(raw) 기누적: 확정 반영 없이 원천 일누적만
     rec.기raw = 0;
@@ -2460,10 +2470,10 @@ function recalc() {
 
     const w = dow(asOf);
     const sel = $("#dayMode").value;
-    // 보고일 기준 '전일까지가 확정'이고 금일은 전일 확정치를 그대로 쓴다.
-    // 따라서 요일(목·금)에 따라 금일 값이 추정 파일로 바뀌면 안 된다 → 자동은 항상 원천.
-    // 주간 추정 파일은 [오늘 쓸 숫자]에서 사용자가 직접 고를 때만 사용한다.
-    const autoMode = "원천";
+    // 요일별 기준(작업 관행):
+    //  월~수 = 원천. 금일은 보고일 전일의 확정치를 그대로 쓴다.
+    //  목·금 = 주간 추정 파일. 금일은 '보고일 당일'의 추정치를 쓰고, 누적에도 그 추정치가 들어간다.
+    const autoMode = (w === 4 || w === 5) ? "추정" : "원천";
     const mode = sel === "auto" ? autoMode : sel;
     const wkName = ["일", "월", "화", "수", "목", "금", "토"][w];
     const estHas = !!EST.데이터[asOf];
