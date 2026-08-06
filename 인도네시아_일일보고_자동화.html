@@ -1193,7 +1193,7 @@ function weeklyCheck(ledger, asOf, fxOf, thr) {
    당월은 마감 전까지 일데이터를 누적한다. 확정 데이터가 없으면 전부 raw 일누적(기존 동작). */
 let CLOSE = { 버전: 1, 단위: "억원", 데이터: {}, 이력: [] };   // {"2026-06":{단계:"확정", BK:.., AM:.., ...}}
 /* 관리회계 확정 실적 내장(Back 집계시트 1~6월 확정, 1~3월은 1월 행에 합산). 파일 업로드로 덮어쓸 수 있음. */
-const EMBEDDED_CLOSE = {"2026-01":{"단계":"확정","BK":17.52655,"AM":2.802188,"IB FEE":6.639452,"신용":10.10982,"예금":1.761488,"SW":7.752505,"IB BOOK":4.055207,"기타":2.577685},"2026-02":{"단계":"확정","BK":0,"AM":0,"IB FEE":0,"신용":0,"예금":0,"SW":0,"IB BOOK":0,"기타":0},"2026-03":{"단계":"확정","BK":0,"AM":0,"IB FEE":0,"신용":0,"예금":0,"SW":0,"IB BOOK":0,"기타":0},"2026-04":{"단계":"확정","BK":4.347806,"AM":1.138485,"IB FEE":1.865669,"신용":3.35644,"예금":0.614942,"SW":1.974607,"IB BOOK":1.760884,"기타":0.899207},"2026-05":{"단계":"확정","BK":4.426692,"AM":0.845184,"IB FEE":0.234019,"신용":3.623971,"예금":0.399445,"SW":1.142365,"IB BOOK":3.183579,"기타":1.164067},"2026-06":{"단계":"확정","BK":4.144278,"AM":1.220558,"IB FEE":-0.201501,"신용":3.810347,"예금":0.533477,"SW":1.100316,"IB BOOK":4.326634,"기타":-0.377637}};
+const EMBEDDED_CLOSE = {"2026-01":{"단계":"확정","BK":17.5265501561015,"AM":2.802187964892454,"IB FEE":6.639451597814395,"신용":10.109819963166528,"예금":1.7614875111433526,"SW":7.75250515499472,"IB BOOK":4.055206711402,"기타":2.5776849632001224},"2026-02":{"단계":"확정","BK":0,"AM":0,"IB FEE":0,"신용":0,"예금":0,"SW":0,"IB BOOK":0,"기타":0},"2026-03":{"단계":"확정","BK":0,"AM":0,"IB FEE":0,"신용":0,"예금":0,"SW":0,"IB BOOK":0,"기타":0},"2026-04":{"단계":"확정","BK":4.347806339253127,"AM":1.1384853704046447,"IB FEE":1.8656686850920732,"신용":3.3564399877012248,"예금":0.6149415264824473,"SW":1.9746066811142646,"IB BOOK":1.760884412299581,"기타":0.8992071827965117},"2026-05":{"단계":"확정","BK":4.426691543771653,"AM":0.8451839534805106,"IB FEE":0.2340189506502986,"신용":3.623971264817415,"예금":0.3994454617836414,"SW":1.1423650027352596,"IB BOOK":3.1835785643264627,"기타":1.1640672965957475},"2026-06":{"단계":"확정","BK":4.144278217477336,"AM":1.220557674184459,"IB FEE":-0.201500607705226,"신용":3.810346872967089,"예금":0.5334766797444115,"SW":1.100315595372292,"IB BOOK":4.326633908915283,"기타":-0.377637185274027}};
 for (const _mk in EMBEDDED_CLOSE) if (!CLOSE.데이터[_mk]) CLOSE.데이터[_mk] = EMBEDDED_CLOSE[_mk];
 const CLOSE_ROWS = ["BK", "AM", "IB FEE", "신용", "예금", "SW", "IB BOOK", "기타"];
 function monthKey(d) { return d.slice(0, 7); }
@@ -1255,7 +1255,13 @@ function buildReport(ledger, D, fxOf, fyStart, mode, fillGap) {
     const rec = { 항목: rname, 기목표: tgt[rname] != null ? tgt[rname] : null, 구성: codes.map(c => itemByCode(c).이름).join("+") };
     const carry = fillGap && CARRY_ROWS.includes(rname);
     // 추정 모드: 보고일 당일값은 추정 파일 값을 쓴다. 금일뿐 아니라 누적(주간·월간·분기·기)에도 동일하게 반영.
-    const ev = (est && typeof est[rname] === "number") ? est[rname] : null;
+    // IDRmn 원본이 있으면 도구의 전정밀 환율로 환산(파일의 반올림 환산값보다 정확), 없으면 억원 값 사용
+    let ev = null;
+    if (est) {
+      const fxD = fxOf(D);
+      if (est.IDRmn && typeof est.IDRmn[rname] === "number" && fxD) ev = est.IDRmn[rname] / fxD / 100;
+      else if (typeof est[rname] === "number") ev = est[rname];
+    }
     for (const p of ["금일", "주간", "월간", "분기", "기"]) {
       // 분기·기누적은 마감월 확정치 + 당월 일누적으로 산출 (확정 데이터가 있을 때만)
       if (p === "분기" && blendQ) { rec[p] = blendEok(ledger, rname, codes, qStartMk, Rcum, fxOf, carry, ev); blended = true; continue; }
@@ -1274,7 +1280,7 @@ function buildReport(ledger, D, fxOf, fyStart, mode, fillGap) {
     for (const c of codes) rec.기raw += carry ? sumEokCarry(ledger, c, P.기.from, P.기.to, fxOf)
                                               : sumEok(ledger, c, P.기.from, P.기.to, fxOf);
     rec.원천금일 = rec.금일;
-    if (est && typeof est[rname] === "number") { rec.추정금일 = est[rname]; rec.금일 = est[rname]; }
+    if (ev != null) { rec.추정금일 = ev; rec.금일 = ev; }
     out.push(rec);
   }
   const tot = { 항목: "KISI 계", 기목표: out.reduce((a, r) => a + (r.기목표 || 0), 0), 구성: "" };
@@ -2758,6 +2764,9 @@ $("#fxFile").onchange = e => { routeFiles(e.target.files); };
 /* ================= 주간 추정 파일 (FY26_KISI_일일실적 집계) ================= */
 let EST = { 버전: 1, 출처: "", 데이터: {} };     // {일자: {보고행: 억원}}
 const EST_ROWS = { 33: "BK", 38: "AM", 39: "IB FEE", 45: "신용", 46: "예금", 47: "SW", 48: "IB BOOK", 49: "기타" };
+/* 같은 시트의 IDRmn 블록(억원 블록보다 27행 위). 억원 블록은 파일이 '반올림된 환율'로 환산해 둔 값이라
+   미세오차가 생기므로, 가능하면 IDRmn 원본을 읽어 도구의 전정밀 기누적환율로 환산한다. */
+const EST_ROWS_IDR = { 6: "BK", 11: "AM", 12: "IB FEE", 18: "신용", 19: "예금", 20: "SW", 21: "IB BOOK", 22: "기타" };
 
 function importEstWorkbook(wb) {
   const name = wb.SheetNames.find(n => /KISI[_\s]*일일실적\s*집계/.test(n))
@@ -2798,6 +2807,16 @@ function importEstWorkbook(wb) {
       data[col.d] = data[col.d] || {};
       data[col.d][key] = v;
       n++;
+    }
+  }
+  // IDRmn 원본도 함께 담아 둔다(보고 시 도구 환율로 환산해 억원 블록의 반올림 오차를 피한다)
+  for (const rowNo of Object.keys(EST_ROWS_IDR)) {
+    const key = EST_ROWS_IDR[rowNo];
+    for (const col of cols) {
+      const v = cel(+rowNo, col.c);
+      if (typeof v !== "number" || !isFinite(v)) continue;
+      data[col.d] = data[col.d] || {};
+      (data[col.d].IDRmn = data[col.d].IDRmn || {})[key] = v;
     }
   }
   EST = { 버전: 1, 출처: name, 갱신시각: new Date().toISOString(), 데이터: Object.assign({}, EST.데이터, data) };
