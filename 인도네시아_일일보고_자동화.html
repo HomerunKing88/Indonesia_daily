@@ -929,22 +929,24 @@ function prevReportDay(D) {
   }
   return addDays(D, -1);
 }
-/* 보고일 D 는 원천 D-1 까지를 담는다. 구간 시작도 같은 규칙으로 하루 당긴다. */
+/* 혼합 기준(정답지 방식):
+   금일·잔고 = 전일(D-1, 확정) 상한 / 주간·월간·분기·기 = 당일(D, 추정 포함) 상한. 내일 이후는 제외. */
 function buildPeriods(ledger, D, fyStart) {
   const fy = fyStart || "2026-01-01";
-  const R = D;                                    // 원천 상한 = 보고일 '당일'(당일 포함). 보고일 이후(내일 이후)는 제외
+  const Rday = addDays(D, -1);                    // 금일·잔고 상한 = 전일(확정)
+  const Rcum = D;                                 // 누적(주간·월간·분기·기) 상한 = 당일(추정 포함)
   const pD = prevReportDay(D);                    // 직전 보고일
-  const dayFrom = addDays(pD, 1);                 // 금일 구간 시작 = 직전 보고일 다음날 (평일=당일 단일, 월요일=토~월)
-  // 주간 = 토·일·월·화·수·목·금 (토요일 시작 주). 해당 주 토요일부터.
+  const dayFrom = pD;                             // 금일 시작 (평일=전일 단일, 월요일=금·토·일)
+  // 주간 = 토요일 시작 주. 해당 주 토요일부터(월요일 이월과 정합)
   const satOfWeek = addDays(D, -((dow(D) + 1) % 7));
-  const wkFrom = (satOfWeek < dayFrom) ? satOfWeek : dayFrom;   // 월요일 이월(금·토·일)과 정합
+  const wkFrom = (satOfWeek < dayFrom) ? satOfWeek : dayFrom;
   return {
-    원천상한: R, 직전보고일: pD,
-    금일: { from: dayFrom, to: R, label: `${dayFrom} ~ ${R}` },
-    주간: { from: wkFrom, to: R, label: `${wkFrom} ~ ${R}` },
-    월간: { from: firstOfMonth(D), to: R, label: `${firstOfMonth(D)} ~ ${R}` },
-    분기: { from: firstOfQuarter(D), to: R, label: `${firstOfQuarter(D)} ~ ${R}` },
-    기: { from: fy, to: R, label: `${fy} ~ ${R}` }
+    원천상한: Rday, 누적상한: Rcum, 직전보고일: pD,
+    금일: { from: dayFrom, to: Rday, label: `${dayFrom} ~ ${Rday}` },
+    주간: { from: wkFrom, to: Rcum, label: `${wkFrom} ~ ${Rcum}` },
+    월간: { from: firstOfMonth(D), to: Rcum, label: `${firstOfMonth(D)} ~ ${Rcum}` },
+    분기: { from: firstOfQuarter(D), to: Rcum, label: `${firstOfQuarter(D)} ~ ${Rcum}` },
+    기: { from: fy, to: Rcum, label: `${fy} ~ ${Rcum}` }
   };
 }
 
@@ -1017,7 +1019,7 @@ function runChecks(src, ledger, ex, asOf, fx) {
 
   // 6) 기준일 확인
   {
-    const R = asOf;                               // 원천 상한 = 보고일 당일
+    const R = addDays(asOf, -1);                  // 금일·잔고 상한 = 전일(확정)
     let last = null; for (const d of all) if (d <= R) last = d;
     if (!last) push("fail", "원천 데이터 없음", `보고일 ${asOf} 기준 원천 상한 ${R} 이하 자료가 없습니다.`);
     else if (last === R) push("pass", "원천 데이터 정상", `보고일 ${asOf} · 원천 상한 ${R} · 원천 최신 ${hi}`);
@@ -1180,7 +1182,8 @@ function buildReport(ledger, D, fxOf, fyStart, mode, fillGap) {
   for (const it of MAP["항목"]) { if (it["보고행"]) { byRow[it["보고행"]] = byRow[it["보고행"]] || []; byRow[it["보고행"]].push(it["코드"]); } }
   const useEst = (mode === "추정");
   const est = useEst ? (EST.데이터[D] || null) : null;
-  const R = P.원천상한, Rmk = monthKey(R);
+  const Rcum = P.누적상한;                               // 누적(분기·기) 상한 = 당일
+  const Rmk = monthKey(Rcum);
   const qStartMk = monthKey(firstOfQuarter(D));         // 분기 시작월 (경계 -1일 없이 월 기준)
   const fyStartMk = monthKey(fyStart || "2026-01-01");  // 기 시작월
   const blendQ = hasCloseInRange(qStartMk, Rmk);
@@ -1193,8 +1196,8 @@ function buildReport(ledger, D, fxOf, fyStart, mode, fillGap) {
     const carry = fillGap && CARRY_ROWS.includes(rname);
     for (const p of ["금일", "주간", "월간", "분기", "기"]) {
       // 분기·기누적은 마감월 확정치 + 당월 일누적으로 산출 (확정 데이터가 있을 때만)
-      if (p === "분기" && blendQ) { rec[p] = blendEok(ledger, rname, codes, qStartMk, R, fxOf, carry); blended = true; continue; }
-      if (p === "기" && blendY) { rec[p] = blendEok(ledger, rname, codes, fyStartMk, R, fxOf, carry); blended = true; continue; }
+      if (p === "분기" && blendQ) { rec[p] = blendEok(ledger, rname, codes, qStartMk, Rcum, fxOf, carry); blended = true; continue; }
+      if (p === "기" && blendY) { rec[p] = blendEok(ledger, rname, codes, fyStartMk, Rcum, fxOf, carry); blended = true; continue; }
       let s = 0;
       for (const c of codes) s += carry ? sumEokCarry(ledger, c, P[p].from, P[p].to, fxOf)
                                         : sumEok(ledger, c, P[p].from, P[p].to, fxOf);
@@ -2353,9 +2356,9 @@ function recalc() {
     const mi = $("#modeInfo");
     if (mi) mi.innerHTML = `${asOf}(${wkName}) · <b>${mode}</b> 기준` +
       (mode === "추정" ? (estHas ? " · 추정 파일 값 사용" : " · <span class='tag t-bad'>추정 파일에 이 날짜 없음 → 원천으로 계산</span>") : "") +
-      ` · 원천 상한 ${asOf}`;
+      ` · 금일상한 ${addDays(asOf, -1)} · 누적상한 ${asOf}`;
 
-    const checks = runChecks(SRCPARSE, LEDGER, ex, asOf, fxOf(asOf));
+    const checks = runChecks(SRCPARSE, LEDGER, ex, asOf, fxOf(addDays(asOf, -1)));
     const wk = weeklyCheck(LEDGER, asOf, fxOf, thr);
     const rep = buildReport(LEDGER, asOf, fxOf, fyStart, mode, $("#fillGap").value === "1");
     RESULT = { ledger: LEDGER, changes: m.changes, added: m.added, newDates: m.newDates, ex, checks, wk, rep, asOf, fx, fxOf, ser: FXSERIES };
