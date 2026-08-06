@@ -1387,7 +1387,7 @@ function renderWeekly(w, thr) {
     const c = el("div", "card");
     c.innerHTML = `<h3>${title}</h3>${note ? `<p class='small muted'>${note}</p>` : ""}`;
     const t = el("table");
-    let h = "<thead><tr><th class='l'>수익원</th><th>주간 목표(억원)</th><th>실적(억원)</th><th>차이</th><th>목표 대비 (%)</th><th>확인</th></tr></thead><tbody>";
+    let h = "<thead><tr><th class='l'>수익원</th><th>주간 목표(억원)</th><th>실적(억원)</th><th>차이</th><th>목표 대비 증감률</th><th>확인</th></tr></thead><tbody>";
     for (const r of rows) {
       const cls = r.목표대비 == null ? "" : (r.목표대비 >= 0 ? "over" : "under");
       const flag = r.확인대상 ? " flag" : "";
@@ -1672,8 +1672,11 @@ function buildForm(ledger, asOf, fxOf, fyStart, rep, inp) {
   };
 
   // 달성률 (작업파일 산식 재현)
-  const bd = bizDays(P.주간.from, R);
-  const cdM = calDays(P.월간.from, R), cdQ = calDays(P.분기.from, R), cdY = calDays(P.기.from, R);
+  // 경과일수는 '실적이 담긴 구간의 끝'과 같아야 한다. 주간·월간·분기·기 실적은 누적상한(보고일)까지이므로
+  // 경과일수도 누적상한 기준으로 센다(과거에는 원천상한=전일 기준이라 하루씩 어긋나 달성률이 부풀려졌음).
+  const Rcum = P.누적상한;
+  const bd = bizDays(P.주간.from, Rcum);
+  const cdM = calDays(P.월간.from, Rcum), cdQ = calDays(P.분기.from, Rcum), cdY = calDays(P.기.from, Rcum);
   const rate = (row) => ({
     금일: row.기목표 ? row.금일 / (row.기목표 / 246) : null,
     주간: row.기목표 && bd ? (row.주간 / bd * 5) / (row.기목표 / 52) : null,
@@ -2228,37 +2231,46 @@ function renderHoliday() {
 function renderReport(rep, asOf) {
   const box = $("#repOut"); box.innerHTML = "";
   const P = rep.periods;
+  const cdY = calDays(P.기.from, P.누적상한);   // 기 경과일수(연환산 달성률 계산용)
   const head = el("div", "card");
   const modeTag = rep.mode === "추정"
     ? `<span class="tag t-warn">주간 추정 파일 기준</span>` : `<span class="tag t-good">원천(로데이터) 기준</span>`;
   head.innerHTML = `<h3>세부 일일보고 · KISI 순영업수익 (억원) ${modeTag} ${rep.혼합 ? "<span class='tag t-good'>분기·기누적: 확정 실적 반영</span>" : ""}</h3>
     <p class='small'>보고일 ${asOf} · 원천 상한 ${P.원천상한} · 금일 ${P.금일.label} · 주간 ${P.주간.label} · 월간 ${P.월간.label} · 분기 ${P.분기.label} · 기 ${P.기.label}</p>
     <p class='small muted'>보고일 실적은 원천의 전일까지를 담습니다. 기본값은 <b>당일(오늘) 기준</b>으로 그 이하 최신 자료일 하루만 담는 단일일 보고이며, 원천에 오늘 이후(미래) 날짜 데이터가 있어도 쓰지 않습니다. 보고일을 뒤로(예: 월요일) 직접 지정해 다시 계산하면 금·토·일을 포함한 주간단위로 확장됩니다.
-    ${rep.혼합 ? "분기·기누적은 마감월 관리회계 확정치 + 당월 일누적으로 산출했습니다." : "분기·기누적은 원천 raw 누적입니다. 관리회계 확정치는 <b>확정 실적</b> 탭에서 넣으면 반영됩니다."}</p>`;
+    ${rep.혼합 ? "분기·기누적은 마감월 관리회계 확정치 + 당월 일누적으로 산출했습니다." : "분기·기누적은 원천 raw 누적입니다. 관리회계 확정치는 <b>확정 실적</b> 탭에서 넣으면 반영됩니다."}</p>
+    <p class='small'>금액은 <b>억원 · 소수 2자리</b>로 통일해 표기합니다. 비율 두 가지는 서로 다른 지표입니다.
+    <b>기 진도율</b> = 기누적 ÷ 기목표 (경과 기간과 무관한 소진율) ·
+    <b>기 연환산 달성률</b> = (기누적 ÷ 경과 ${cdY}일 × 365) ÷ 기목표 (현재 속도가 연말까지 이어질 때의 달성률).
+    보고 양식의 '달성률'도 연환산 기준입니다.</p>`;
   box.appendChild(head);
 
   const t = el("table");
   let h = `<thead><tr><th class='l'>구분</th><th class='l'>구성</th><th>기목표</th>
-    <th>금일</th><th>달성률</th><th>주간</th><th>월간</th><th>분기</th><th>기</th><th>기달성률</th></tr></thead><tbody>`;
+    <th>금일</th><th>주간</th><th>월간</th><th>분기</th><th>기</th>
+    <th>기 진도율</th><th>기 연환산 달성률</th></tr></thead><tbody>`;
   const line = (r, cls) => {
-    const gDay = r.기목표 ? r.금일 / (r.기목표 / 246) : null;
-    const gFy = r.기목표 ? r.기 / r.기목표 : null;
+    const prog = r.기목표 ? r.기 / r.기목표 : null;                          // 진도율 = 기누적 ÷ 기목표 (경과 무관)
+    const ann = (r.기목표 && cdY) ? (r.기 / cdY * 365) / r.기목표 : null;     // 연환산 달성률 = (기누적 ÷ 경과일 × 365) ÷ 기목표
     return `<tr class="${cls||''}"><td class='l'>${r.항목}</td><td class='l small muted'>${r.구성}</td>
       <td class='num'>${num(r.기목표,2)}</td>
-      <td class='num'>${num(r.금일,4)}</td><td class='num'>${gDay==null?"-":pct(gDay)}</td>
-      <td class='num'>${num(r.주간,4)}</td><td class='num'>${num(r.월간,4)}</td>
-      <td class='num'>${num(r.분기,4)}</td><td class='num'>${num(r.기,4)}</td>
-      <td class='num'>${gFy==null?"-":pct(gFy)}</td></tr>`;
+      <td class='num'>${num(r.금일,2)}</td>
+      <td class='num'>${num(r.주간,2)}</td><td class='num'>${num(r.월간,2)}</td>
+      <td class='num'>${num(r.분기,2)}</td><td class='num'>${num(r.기,2)}</td>
+      <td class='num'>${prog==null?"-":pct(prog)}</td>
+      <td class='num'>${ann==null?"-":pct(ann)}</td></tr>`;
   };
   for (const r of rep.rows) h += line(r);
   h += line(rep.total, "tot");
   // 회계마감 이전(raw) 기누적 — 가장 아래 별도 행 (확정 반영이 있을 때 의미)
   {
-    const gRaw = rep.total.기목표 ? rep.total.기raw / rep.total.기목표 : null;
+    const progRaw = rep.total.기목표 ? rep.total.기raw / rep.total.기목표 : null;
+    const annRaw = (rep.total.기목표 && cdY) ? (rep.total.기raw / cdY * 365) / rep.total.기목표 : null;
     h += `<tr class="tot" style="opacity:.82"><td class='l'>기누적 (회계마감 전·raw)</td><td class='l small muted'>확정 미반영 원천 누적</td>
-      <td class='num'>${num(rep.total.기목표,2)}</td><td class='num'>-</td><td class='num'>-</td>
-      <td class='num'>-</td><td class='num'>-</td><td class='num'>-</td>
-      <td class='num'>${num(rep.total.기raw,4)}</td><td class='num'>${gRaw==null?"-":pct(gRaw)}</td></tr>`;
+      <td class='num'>${num(rep.total.기목표,2)}</td>
+      <td class='num'>-</td><td class='num'>-</td><td class='num'>-</td><td class='num'>-</td>
+      <td class='num'>${num(rep.total.기raw,2)}</td>
+      <td class='num'>${progRaw==null?"-":pct(progRaw)}</td><td class='num'>${annRaw==null?"-":pct(annRaw)}</td></tr>`;
   }
   h += "</tbody>"; t.innerHTML = h;
   const c = el("div", "card"); c.appendChild(t); box.appendChild(c);
@@ -2270,8 +2282,8 @@ function renderReport(rep, asOf) {
       <p class='small muted'>왼쪽은 마감월 관리회계 확정치를 반영한 기누적, 오른쪽은 확정 없이 원천만 누적한 회계마감 전 값입니다.</p>`;
     const tt = el("table");
     let hh = "<thead><tr><th class='l'>구분</th><th>확정 반영 기누적</th><th>회계마감 전(raw)</th><th>차이</th></tr></thead><tbody>";
-    for (const r of rep.rows) hh += `<tr><td class='l'>${r.항목}</td><td class='num'>${num(r.기,4)}</td><td class='num'>${num(r.기raw,4)}</td><td class='num'>${num(r.기-r.기raw,4)}</td></tr>`;
-    hh += `<tr class='tot'><td class='l'>KISI 계</td><td class='num'>${num(rep.total.기,4)}</td><td class='num'>${num(rep.total.기raw,4)}</td><td class='num'>${num(rep.total.기-rep.total.기raw,4)}</td></tr>`;
+    for (const r of rep.rows) hh += `<tr><td class='l'>${r.항목}</td><td class='num'>${num(r.기,2)}</td><td class='num'>${num(r.기raw,2)}</td><td class='num'>${num(r.기-r.기raw,2)}</td></tr>`;
+    hh += `<tr class='tot'><td class='l'>KISI 계</td><td class='num'>${num(rep.total.기,2)}</td><td class='num'>${num(rep.total.기raw,2)}</td><td class='num'>${num(rep.total.기-rep.total.기raw,2)}</td></tr>`;
     hh += "</tbody>"; tt.innerHTML = hh; cc0.appendChild(tt); box.appendChild(cc0);
   }
 
@@ -2283,13 +2295,13 @@ function renderReport(rep, asOf) {
     for (const r of rep.rows) {
       const a = r.추정금일 != null ? r.추정금일 : r.원천금일, b = r.원천금일;
       const d = b - a, rel = a ? d / Math.abs(a) : null;
-      h2 += `<tr><td class='l'>${r.항목}</td><td class='num'>${num(a,6)}</td><td class='num'>${num(b,6)}</td>
-        <td class='num' style="color:${Math.abs(d)>0.0005?'var(--bad)':'inherit'}">${num(d,6)}</td>
+      h2 += `<tr><td class='l'>${r.항목}</td><td class='num'>${num(a,2)}</td><td class='num'>${num(b,2)}</td>
+        <td class='num' style="color:${Math.abs(d)>0.0005?'var(--bad)':'inherit'}">${num(d,4)}</td>
         <td class='num'>${rel==null?"-":pct(rel)}</td></tr>`;
     }
     const A = rep.total.추정금일 != null ? rep.total.추정금일 : rep.total.원천금일;
-    h2 += `<tr class='tot'><td class='l'>KISI 계</td><td class='num'>${num(A,6)}</td><td class='num'>${num(rep.total.원천금일,6)}</td>
-      <td class='num'>${num(rep.total.원천금일-A,6)}</td><td class='num'>${A?pct((rep.total.원천금일-A)/Math.abs(A)):"-"}</td></tr>`;
+    h2 += `<tr class='tot'><td class='l'>KISI 계</td><td class='num'>${num(A,2)}</td><td class='num'>${num(rep.total.원천금일,2)}</td>
+      <td class='num'>${num(rep.total.원천금일-A,4)}</td><td class='num'>${A?pct((rep.total.원천금일-A)/Math.abs(A)):"-"}</td></tr>`;
     h2 += "</tbody>"; t2.innerHTML = h2; cc.appendChild(t2);
     box.appendChild(cc);
   }
