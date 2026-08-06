@@ -2410,7 +2410,10 @@ function recalc() {
 
     const w = dow(asOf);
     const sel = $("#dayMode").value;
-    const autoMode = (w === 4 || w === 5) ? "추정" : "원천";     // 목·금은 추정, 나머지는 원천
+    // 보고일 기준 '전일까지가 확정'이고 금일은 전일 확정치를 그대로 쓴다.
+    // 따라서 요일(목·금)에 따라 금일 값이 추정 파일로 바뀌면 안 된다 → 자동은 항상 원천.
+    // 주간 추정 파일은 [오늘 쓸 숫자]에서 사용자가 직접 고를 때만 사용한다.
+    const autoMode = "원천";
     const mode = sel === "auto" ? autoMode : sel;
     const wkName = ["일", "월", "화", "수", "목", "금", "토"][w];
     const estHas = !!EST.데이터[asOf];
