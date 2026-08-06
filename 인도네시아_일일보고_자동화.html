@@ -2111,10 +2111,18 @@ function formToXlsx(F) {
 /* PNG 저장 */
 function formToPng(scale) {
   const node = $("#formSheet");
-  const w = node.offsetWidth, hgt = node.offsetHeight;
+  const rect = node.getBoundingClientRect();
+  const w = Math.ceil(rect.width || node.scrollWidth || 920);
+  const hgt = Math.ceil(rect.height || node.scrollHeight || 1200);
   const css = [...document.styleSheets].map(sh => { try { return [...sh.cssRules].map(r => r.cssText).join("\n"); } catch (e) { return ""; } }).join("\n");
   const clone = node.cloneNode(true);
-  const html = `<div xmlns="http://www.w3.org/1999/xhtml"><style>${css}</style>${clone.outerHTML}</div>`;
+  // foreignObject 안은 XML로 파싱된다. HTML의 void 요소(<col>·<br>·<img> 등)는 outerHTML에서 자기닫음이 아니라
+  // XML 파싱이 깨지므로(<colgroup> 안의 <col>), XMLSerializer로 직렬화해 XHTML 형태로 만든다.
+  let xhtml;
+  try { xhtml = new XMLSerializer().serializeToString(clone); }
+  catch (e) { xhtml = clone.outerHTML; }
+  // CSS는 CDATA로 감싸 '>' '&' 등이 XML을 깨뜨리지 않게 한다.
+  const html = `<div xmlns="http://www.w3.org/1999/xhtml"><style><![CDATA[${String(css).replace(/\]\]>/g, "]]&gt;")}]]></style>${xhtml}</div>`;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${hgt}">
     <foreignObject width="100%" height="100%">${html}</foreignObject></svg>`;
   const img = new Image();
